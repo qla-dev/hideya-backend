@@ -23,7 +23,7 @@ Push to `main`, then open `https://qla.dev/hideya/endpoints/redeploy.php` (git p
 | PATCH | `/api/rooms/{code}/me` | player, lobby | `name?`, `pick? (hunter\|runner\|random)`, `ready?` |
 | POST | `/api/rooms/{code}/start` | host | assigns teams, starts the clock |
 | POST | `/api/rooms/{code}/location` | player | `latitude`, `longitude` (send every ~5 s; doubles as heartbeat) |
-| POST | `/api/rooms/{code}/radio` | player in round | `text` (≤ 300, own team only) |
+| POST | `/api/rooms/{code}/chat` | player in round | `text` (≤ 300, own team only) |
 | POST | `/api/rooms/{code}/tagged` | runner | honour-system tag |
 | POST | `/api/rooms/{code}/end` | host | ends the round (`cancelled`) |
 | POST | `/api/rooms/{code}/leave` | player | host passes to the next player |
@@ -45,7 +45,7 @@ Every room response is the viewer's state:
 { room: { code, status, rules, center, startedAt, headStartEndsAt, endsAt, endedAt, outcome, revision, serverTime, players: [...] },
   you: { id, team, host },
   positions: [ { id, lat, lng, live, at, second? } ],
-  radio: [ { id, kind, playerId, name, text, key, values, team, at, second } ],
+  chat: [ { id, kind, playerId, name, text, key, values, team, at, second } ],
   realtime: { provider, key, cluster, authEndpoint, channels, events, heartbeatSeconds } }
 ```
 
@@ -62,7 +62,7 @@ Apply a response or event only when its `revision` is newer than the one you hol
 | Channel | Event | Payload |
 | --- | --- | --- |
 | `private-room.{code}` | `room.updated` | `{reason, revision, room}`: joined, rules, player, started, tagged, left, ended |
-| `private-room.{code}.{team}` | `team.updated` | `{type: location, position}`, `{type: radio, message}`, hunters only: `{type: ping, second, positions}` |
+| `private-room.{code}.{team}` | `team.updated` | `{type: location, position}`, `{type: chat, message}`, hunters only: `{type: ping, second, positions}` |
 
 `/api/realtime/auth` signs only the caller's room channel and own team channel. Events are sent immediately (no queue worker), as in miseryindex; a Pusher failure is logged and never fails the request.
 

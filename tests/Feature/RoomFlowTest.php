@@ -89,21 +89,21 @@ class RoomFlowTest extends TestCase
         $this->assertFalse($ghost['live']);
         $this->assertSame(180, $ghost['second']);
         Event::assertDispatched(TeamUpdated::class, fn ($e) => $e->team === 'hunter' && $e->payload['type'] === 'ping');
-        $keys = collect($this->as($runner)->getJson("/api/rooms/{$code}")->json('radio'))->pluck('key');
-        $this->assertContains('radio.event.headOverRunners', $keys);
-        $this->assertContains('radio.event.pingRunners', $keys);
-        $this->assertNotContains('radio.event.pingHunters', $keys);
+        $keys = collect($this->as($runner)->getJson("/api/rooms/{$code}")->json('chat'))->pluck('key');
+        $this->assertContains('chat.event.headOverRunners', $keys);
+        $this->assertContains('chat.event.pingRunners', $keys);
+        $this->assertNotContains('chat.event.pingHunters', $keys);
     }
 
-    public function test_radio_stays_within_the_team(): void
+    public function test_chat_stays_within_the_team(): void
     {
         Event::fake([RoomUpdated::class, TeamUpdated::class]);
         [$code, $hunter, $runner] = $this->lobby();
-        $this->as($runner)->postJson("/api/rooms/{$code}/radio", ['text' => 'too early'])->assertStatus(409);
+        $this->as($runner)->postJson("/api/rooms/{$code}/chat", ['text' => 'too early'])->assertStatus(409);
         $this->as($hunter)->postJson("/api/rooms/{$code}/start");
-        $this->as($runner)->postJson("/api/rooms/{$code}/radio", ['text' => 'Under the slide.'])->assertOk();
-        $this->assertContains('Under the slide.', collect($this->as($runner)->getJson("/api/rooms/{$code}")->json('radio'))->pluck('text'));
-        $this->assertNotContains('Under the slide.', collect($this->as($hunter)->getJson("/api/rooms/{$code}")->json('radio'))->pluck('text'));
+        $this->as($runner)->postJson("/api/rooms/{$code}/chat", ['text' => 'Under the slide.'])->assertOk();
+        $this->assertContains('Under the slide.', collect($this->as($runner)->getJson("/api/rooms/{$code}")->json('chat'))->pluck('text'));
+        $this->assertNotContains('Under the slide.', collect($this->as($hunter)->getJson("/api/rooms/{$code}")->json('chat'))->pluck('text'));
         Event::assertDispatched(TeamUpdated::class, fn ($e) => $e->team === 'runner' && ($e->payload['message']['text'] ?? null) === 'Under the slide.');
     }
 

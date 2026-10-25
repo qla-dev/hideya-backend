@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class RadioMessage extends Model
+class ChatMessage extends Model
 {
     public const UPDATED_AT = null;
 

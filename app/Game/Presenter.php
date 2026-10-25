@@ -3,7 +3,7 @@
 namespace App\Game;
 
 use App\Models\Player;
-use App\Models\RadioMessage;
+use App\Models\ChatMessage;
 use App\Models\Room;
 use Illuminate\Support\Carbon;
 
@@ -52,7 +52,7 @@ final class Presenter
             'room' => self::publicState($room),
             'you' => ['id' => $viewer->id, 'team' => $viewer->team, 'host' => $viewer->is_host],
             'positions' => self::positionsFor($room, $viewer),
-            'radio' => self::radioFor($room, $viewer),
+            'chat' => self::chatFor($room, $viewer),
             'realtime' => Realtime::clientConfig($room, $viewer),
         ];
     }
@@ -89,15 +89,15 @@ final class Presenter
         return ['id' => $player->id, 'lat' => $player->lat, 'lng' => $player->lng, 'live' => true, 'at' => self::time($player->located_at)];
     }
 
-    public static function radioFor(Room $room, Player $viewer): array
+    public static function chatFor(Room $room, Player $viewer): array
     {
         return $room->messages()
             ->where(fn ($q) => $q->whereNull('team')->orWhere('team', $viewer->team))
             ->orderByDesc('id')->limit(100)->get()->reverse()->values()
-            ->map(fn (RadioMessage $m) => self::message($m, $room))->all();
+            ->map(fn (ChatMessage $m) => self::message($m, $room))->all();
     }
 
-    public static function message(RadioMessage $message, Room $room): array
+    public static function message(ChatMessage $message, Room $room): array
     {
         return [
             'id' => $message->id,

@@ -29,7 +29,7 @@ class Room extends Model
 
     public function messages(): HasMany
     {
-        return $this->hasMany(RadioMessage::class);
+        return $this->hasMany(ChatMessage::class);
     }
 
     public function pings(): HasMany

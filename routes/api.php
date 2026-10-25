@@ -33,7 +33,7 @@ Route::middleware('throttle:180,1')->group(function () {
     Route::patch('/rooms/{code}/me', [RoomController::class, 'me']);
     Route::post('/rooms/{code}/start', [RoomController::class, 'start']);
     Route::post('/rooms/{code}/location', [RoomController::class, 'location']);
-    Route::post('/rooms/{code}/radio', [RoomController::class, 'radio']);
+    Route::post('/rooms/{code}/chat', [RoomController::class, 'chat']);
     Route::post('/rooms/{code}/tagged', [RoomController::class, 'tagged']);
     Route::post('/rooms/{code}/end', [RoomController::class, 'end']);
     Route::post('/rooms/{code}/leave', [RoomController::class, 'leave']);

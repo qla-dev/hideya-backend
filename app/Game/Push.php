@@ -17,13 +17,13 @@ final class Push
 {
     private const ENDPOINT = 'https://exp.host/--/api/v2/push/send';
 
-    /** Radio events that are also worth a notification, with their English copy. */
+    /** Chat events that are also worth a notification, with their English copy. */
     private const COPY = [
-        'radio.event.headOverRunners' => ['Hunters are out.', 'Stay hidden.'],
-        'radio.event.headOverHunters' => ['Head start is over.', 'Go get them!'],
-        'radio.event.pingRunners' => ['Ping!', 'Your location was just sent to the hunters. Move!'],
-        'radio.event.pingHunters' => ['Ping!', 'The runners just lit up on your map.'],
-        'radio.event.shrinkSoon' => ['Zone shrinks in 1 min', 'Get inside before it closes.'],
+        'chat.event.headOverRunners' => ['Hunters are out.', 'Stay hidden.'],
+        'chat.event.headOverHunters' => ['Head start is over.', 'Go get them!'],
+        'chat.event.pingRunners' => ['Ping!', 'Your location was just sent to the hunters. Move!'],
+        'chat.event.pingHunters' => ['Ping!', 'The runners just lit up on your map.'],
+        'chat.event.shrinkSoon' => ['Zone shrinks in 1 min', 'Get inside before it closes.'],
     ];
 
     public static function forEvent(Room $room, ?string $team, string $key): void

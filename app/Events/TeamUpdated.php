@@ -7,7 +7,7 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
- * Something only one team may see: a teammate's position, a Radio message,
+ * Something only one team may see: a teammate's position, a Chat message,
  * or (hunters only) the runners' positions at a ping.
  */
 class TeamUpdated implements ShouldBroadcastNow

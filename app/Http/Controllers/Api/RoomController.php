@@ -139,15 +139,15 @@ class RoomController extends Controller
         });
     }
 
-    public function radio(Request $request, string $code): JsonResponse
+    public function chat(Request $request, string $code): JsonResponse
     {
         $data = $request->validate(['text' => ['required', 'string', 'max:300']]);
 
         return $this->inRoom($request, $code, function (Room $room, Player $me) use ($data) {
-            abort_unless($room->status === 'playing' && $me->team, 409, 'Radio opens when the round starts.');
-            abort_if($me->isOut(), 403, 'You’re out, so you can read Radio but not send.');
+            abort_unless($room->status === 'playing' && $me->team, 409, 'Chat opens when the round starts.');
+            abort_if($me->isOut(), 403, 'You’re out, so you can read the chat but not send.');
             $message = $room->messages()->create(['player_id' => $me->id, 'team' => $me->team, 'kind' => 'chat', 'text' => trim($data['text']), 'created_at' => now()]);
-            Realtime::team($room, $me->team, ['type' => 'radio', 'message' => Presenter::message($message, $room->load('players'))]);
+            Realtime::team($room, $me->team, ['type' => 'chat', 'message' => Presenter::message($message, $room->load('players'))]);
 
             return null;
         });
@@ -160,7 +160,7 @@ class RoomController extends Controller
             abort_unless($room->status === 'playing' && $me->team === 'runner', 409, 'Only a runner in a running round can be tagged.');
             abort_if($me->tagged_at !== null, 409, 'You’re already out.');
             $me->forceFill(['tagged_at' => now()])->save();
-            Referee::announce($room->load('players'), null, 'radio.event.tagged', ['name' => $me->name]);
+            Referee::announce($room->load('players'), null, 'chat.event.tagged', ['name' => $me->name]);
             Referee::tick($room);
 
             return 'tagged';

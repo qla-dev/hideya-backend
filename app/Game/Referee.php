@@ -32,8 +32,8 @@ final class Referee
         };
 
         if ($t >= $room->headStartSeconds() && $fire('head')) {
-            self::announce($room, 'runner', 'radio.event.headOverRunners');
-            self::announce($room, 'hunter', 'radio.event.headOverHunters');
+            self::announce($room, 'runner', 'chat.event.headOverRunners');
+            self::announce($room, 'hunter', 'chat.event.headOverHunters');
         }
         foreach (Rules::pingSeconds($room->rules) as $second) {
             if ($second <= $t && $second < $room->roundSeconds() && $fire("ping-{$second}")) {
@@ -43,10 +43,10 @@ final class Referee
         foreach (Rules::shrinkSeconds($room->rules) as $second) {
             $size = Rules::zoneAt($room->rules, $second);
             if ($second - 60 <= $t && $fire("warn-{$second}")) {
-                self::announce($room, null, 'radio.event.shrinkSoon', ['size' => $size]);
+                self::announce($room, null, 'chat.event.shrinkSoon', ['size' => $size]);
             }
             if ($second <= $t && $fire("shrink-{$second}")) {
-                self::announce($room, null, 'radio.event.shrinking', ['size' => $size]);
+                self::announce($room, null, 'chat.event.shrinking', ['size' => $size]);
             }
         }
         $room->fired = $fired;
@@ -82,15 +82,15 @@ final class Referee
             'second' => $second,
             'positions' => array_map(fn ($p) => $p + ['live' => false, 'at' => $ping->created_at->toIso8601ZuluString('millisecond'), 'second' => $second], $positions),
         ]);
-        self::announce($room, 'runner', 'radio.event.pingRunners');
-        self::announce($room, 'hunter', 'radio.event.pingHunters');
+        self::announce($room, 'runner', 'chat.event.pingRunners');
+        self::announce($room, 'hunter', 'chat.event.pingHunters');
     }
 
     public static function announce(Room $room, ?string $team, string $key, array $values = []): void
     {
         $message = $room->messages()->create(['team' => $team, 'kind' => 'event', 'key' => $key, 'values' => $values ?: null, 'created_at' => now()]);
         foreach ($team ? [$team] : ['hunter', 'runner'] as $to) {
-            Realtime::team($room, $to, ['type' => 'radio', 'message' => Presenter::message($message, $room)]);
+            Realtime::team($room, $to, ['type' => 'chat', 'message' => Presenter::message($message, $room)]);
         }
         Push::forEvent($room, $team, $key);
     }
