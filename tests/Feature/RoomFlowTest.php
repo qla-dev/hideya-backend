@@ -15,7 +15,7 @@ class RoomFlowTest extends TestCase
 
     private function as(string $token): static
     {
-        return $this->withHeader('Authorization', "Bearer {$token}");
+        return $this->withHeader('X-Player-Token', $token);
     }
 
     /** Host and one guest in a lobby, with picks set. Returns [code, hostToken, guestToken]. */

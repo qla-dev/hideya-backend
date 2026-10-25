@@ -64,7 +64,9 @@ final class Referee
     {
         $room->forceFill(['status' => 'ended', 'ended_at' => now(), 'outcome' => $outcome])->save();
         $room->bump();
-        Realtime::room($room->fresh('players'), 'ended');
+        $fresh = $room->fresh('players');
+        Realtime::room($fresh, 'ended');
+        Push::toPlayers($fresh, null, 'Round over', 'Open Hideya to see how it went.', ['code' => $room->code, 'event' => 'ended']);
     }
 
     /** Hunters get the untagged runners' last known positions; runners are told they were pinged. */
@@ -90,5 +92,6 @@ final class Referee
         foreach ($team ? [$team] : ['hunter', 'runner'] as $to) {
             Realtime::team($room, $to, ['type' => 'radio', 'message' => Presenter::message($message, $room)]);
         }
+        Push::forEvent($room, $team, $key);
     }
 }

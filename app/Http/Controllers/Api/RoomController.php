@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Game\Presenter;
+use App\Game\Push;
 use App\Game\Realtime;
 use App\Game\Referee;
 use App\Game\Rules;
@@ -15,8 +16,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Private rooms. Every response carries the room's revision and server time,
- * so the app can apply it over anything older it got from realtime events.
+ * Private rooms. Room requests authenticate the player with the token from
+ * create/join in the X-Player-Token header; Authorization (optional) carries a
+ * signed-in account, which links the player to it for push notifications.
+ * Every response carries the room's revision and server time, so the app can
+ * apply it over anything older it got from realtime events.
  */
 class RoomController extends Controller
 {
@@ -27,15 +31,19 @@ class RoomController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate(['name' => ['required', 'string', 'max:24'], ...self::centerRules(), ...Rules::validation()]);
+        $user = $request->user('sanctum');
+        if (config('services.revenuecat.require_for_hosting')) {
+            abort_unless($user?->hosting_unlocked_at, 402, 'Unlock hosting to start a game.');
+        }
 
-        [$room, $player, $token] = DB::transaction(function () use ($data) {
+        [$room, $player, $token] = DB::transaction(function () use ($data, $user) {
             $room = Room::create([
                 'code' => $this->freeCode(),
                 'rules' => Rules::merge([], $data['rules'] ?? []),
                 'center_lat' => $data['center']['latitude'] ?? null,
                 'center_lng' => $data['center']['longitude'] ?? null,
             ]);
-            [$player, $token] = $this->addPlayer($room, $data['name'], true);
+            [$player, $token] = $this->addPlayer($room, $data['name'], true, $user?->id);
 
             return [$room, $player, $token];
         });
@@ -46,13 +54,14 @@ class RoomController extends Controller
     public function join(Request $request, string $code): JsonResponse
     {
         $data = $request->validate(['name' => ['required', 'string', 'max:24']]);
+        $userId = $request->user('sanctum')?->id;
 
-        return DB::transaction(function () use ($code, $data) {
+        return DB::transaction(function () use ($code, $data, $userId) {
             $room = Room::where('code', strtoupper($code))->lockForUpdate()->first();
             abort_unless($room, 404, 'No game with that code.');
             abort_unless($room->status === 'lobby', 409, 'This game has already started.');
             abort_if($room->players()->whereNull('left_at')->count() >= self::MAX_PLAYERS, 409, 'This game is full.');
-            [$player, $token] = $this->addPlayer($room, $data['name'], false);
+            [$player, $token] = $this->addPlayer($room, $data['name'], false, $userId);
             $room->bump();
             Realtime::room($room->fresh('players'), 'joined');
 
@@ -110,6 +119,7 @@ class RoomController extends Controller
                 $players->firstWhere('id', $id)->forceFill(['team' => $team, 'tagged_at' => null])->save();
             }
             $room->forceFill(['status' => 'playing', 'started_at' => now(), 'fired' => []])->save();
+            Push::toPlayers($room->load('players'), null, 'The round is on', 'Open Hideya to see your role.', ['code' => $room->code, 'event' => 'started']);
 
             return 'started';
         });
@@ -213,7 +223,7 @@ class RoomController extends Controller
      */
     private function inRoom(Request $request, string $code, callable $change): JsonResponse
     {
-        $token = (string) $request->bearerToken();
+        $token = (string) $request->header('X-Player-Token');
         abort_if($token === '', 401, 'Missing player token.');
 
         return DB::transaction(function () use ($code, $token, $change) {
@@ -233,10 +243,10 @@ class RoomController extends Controller
     }
 
     /** @return array{0: Player, 1: string} */
-    private function addPlayer(Room $room, string $name, bool $host): array
+    private function addPlayer(Room $room, string $name, bool $host, ?int $userId): array
     {
         $token = Str::random(48);
-        $player = $room->players()->create(['name' => trim($name), 'token_hash' => hash('sha256', $token), 'is_host' => $host, 'pick' => 'random']);
+        $player = $room->players()->create(['name' => trim($name), 'token_hash' => hash('sha256', $token), 'is_host' => $host, 'pick' => 'random', 'user_id' => $userId]);
 
         return [$player, $token];
     }

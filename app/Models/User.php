@@ -5,13 +5,16 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
+/** An account from Sign in with Apple or Google. There are no passwords. */
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -22,6 +25,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'apple_sub',
+        'google_sub',
+        'hosting_unlocked_at',
     ];
 
     /**
@@ -32,6 +38,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'apple_sub',
+        'google_sub',
     ];
 
     /**
@@ -43,7 +51,13 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'hosting_unlocked_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function pushTokens(): HasMany
+    {
+        return $this->hasMany(PushToken::class);
     }
 }

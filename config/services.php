@@ -35,4 +35,27 @@ return [
         ],
     ],
 
+    // Sign in with Apple: the token audience is the iOS bundle ID (plus a Services ID if web sign-in is added).
+    'apple' => [
+        'client_ids' => array_values(array_filter(array_map('trim', explode(',', (string) env('APPLE_CLIENT_IDS', 'hideya.qla.dev'))))),
+    ],
+
+    // Google Sign-In: the OAuth client IDs (web, iOS, Android) whose ID tokens are accepted.
+    'google' => [
+        'client_ids' => array_values(array_filter(array_map('trim', explode(',', (string) env('GOOGLE_CLIENT_IDS', ''))))),
+    ],
+
+    // RevenueCat webhook (Authorization header value set in the RevenueCat dashboard) and the hosting entitlement.
+    'revenuecat' => [
+        'webhook_secret' => env('REVENUECAT_WEBHOOK_SECRET'),
+        'hosting_entitlement' => env('REVENUECAT_HOSTING_ENTITLEMENT', 'hosting'),
+        // Off until the store products exist: then creating a room needs the hosting unlock.
+        'require_for_hosting' => (bool) env('HOSTING_REQUIRES_PURCHASE', false),
+    ],
+
+    // Expo push service; an access token is only needed if "enhanced push security" is turned on.
+    'expo' => [
+        'access_token' => env('EXPO_ACCESS_TOKEN'),
+    ],
+
 ];

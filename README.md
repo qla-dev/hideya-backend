@@ -8,7 +8,8 @@ Push to `main`, then open `https://qla.dev/hideya/endpoints/redeploy.php` (git p
 
 ## Authentication
 
-Creating or joining a room returns a `token`. Send it as `Authorization: Bearer <token>` on every room request and on `/api/realtime/auth`. Only its SHA-256 is stored.
+- **Room player:** creating or joining a room returns a `token`. Send it as `X-Player-Token: <token>` on every room request and on `/api/realtime/auth`. Only its SHA-256 is stored.
+- **Account (optional):** Sign in with Apple or Google returns a Sanctum token for `Authorization: Bearer <token>`. Sent with create/join, it links the player to the account (push notifications, hosting unlock). Apple tokens are checked against Apple's keys, audience `APPLE_CLIENT_IDS` (default `hideya.qla.dev`) and the hashed nonce; Google tokens against Google's keys and `GOOGLE_CLIENT_IDS`.
 
 ## Endpoints
 
@@ -27,6 +28,14 @@ Creating or joining a room returns a `token`. Send it as `Authorization: Bearer 
 | POST | `/api/rooms/{code}/end` | host | ends the round (`cancelled`) |
 | POST | `/api/rooms/{code}/leave` | player | host passes to the next player |
 | POST | `/api/realtime/auth` | player | Pusher `socket_id`, `channel_name` |
+| POST | `/api/auth/apple` | anyone | `identityToken`, `nonce?` (raw), `name?` → `{token, user}` |
+| POST | `/api/auth/google` | anyone | `idToken` → `{token, user}` |
+| GET / PATCH / DELETE | `/api/me` | account | read, `name`, delete account (App Store requirement) |
+| POST | `/api/auth/logout` | account | revokes this token |
+| POST / DELETE | `/api/push-tokens` | account | `token` (`ExponentPushToken[...]`), `platform?` |
+| POST | `/api/revenuecat/webhook` | RevenueCat | `Authorization` = `REVENUECAT_WEBHOOK_SECRET`; grants hosting for entitlement `REVENUECAT_HOSTING_ENTITLEMENT` (default `hosting`) to app user `hideya_{userId}` |
+
+Push notifications go through Expo's push service to signed-in players' devices: round start, hunters out, pings (per team), zone shrink warning, round over. `HOSTING_REQUIRES_PURCHASE=true` makes creating a room require the hosting unlock (off until the store products exist).
 
 Rules (minutes unless noted): `roundLength` 10–180, `ping` 0–30 (0 = off), `headStart` 0–15, `zone` bool, `zoneSize` 200–3000 m, `shrinkEvery` 0–15. Defaults match the app: 30 / 2 / 3 / on / 420 / 5.
 
