@@ -54,7 +54,7 @@ final class Presenter
     {
         return [
             'room' => self::publicState($room),
-            'you' => ['id' => $viewer->id, 'team' => $viewer->team, 'host' => $viewer->is_host, 'powerUps' => PowerUps::stateFor($room, $viewer)],
+            'you' => ['id' => $viewer->id, 'team' => $viewer->team, 'host' => $viewer->is_host, 'powerUps' => PowerUps::stateFor($room, $viewer), 'reward' => $viewer->reward],
             'positions' => self::positionsFor($room, $viewer),
             'chat' => self::chatFor($room, $viewer),
             'realtime' => Realtime::clientConfig($room, $viewer),

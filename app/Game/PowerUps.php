@@ -300,6 +300,30 @@ final class PowerUps
         return true;
     }
 
+    /**
+     * Winning gives each signed-in winner one random power-up: the hunters on a
+     * clean sweep, the runners who were never tagged when time runs out.
+     */
+    public static function rewardWinners(Room $room, string $outcome): void
+    {
+        $winners = $room->players->filter(fn (Player $p) => $p->isActive() && $p->user_id && match ($outcome) {
+            'huntersWin' => $p->team === 'hunter',
+            'runnersWin' => $p->team === 'runner' && $p->tagged_at === null,
+            default => false,
+        });
+        $kinds = array_keys(self::KINDS);
+        foreach ($winners as $winner) {
+            $user = User::lockForUpdate()->find($winner->user_id);
+            if (! $user) {
+                continue;
+            }
+            $kind = $kinds[random_int(0, count($kinds) - 1)];
+            self::add($user, $kind, 1);
+            $user->save();
+            $winner->forceFill(['reward' => $kind])->save();
+        }
+    }
+
     /** RevenueCat purchase of a pack: a mix of all four kinds (an even share each, the rest at random). */
     public static function creditPack(User $user, string $productId): bool
     {

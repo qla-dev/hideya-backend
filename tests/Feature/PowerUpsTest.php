@@ -196,4 +196,17 @@ class PowerUpsTest extends TestCase
     {
         $this->postJson('/api/me/daily-power-up')->assertUnauthorized();
     }
+
+    public function test_winning_gives_signed_in_winners_a_power_up(): void
+    {
+        [$code, $hunter, $runner] = $this->round();
+        $this->travel(3)->minutes();
+        $this->as($runner)->postJson("/api/rooms/{$code}/tagged")->assertOk();
+        $won = $this->as($hunter)->getJson("/api/rooms/{$code}")->assertOk();
+        $this->assertSame('huntersWin', $won->json('room.outcome'));
+        $kind = $won->json('you.reward');
+        $this->assertContains($kind, ['ghost', 'decoy', 'shrink', 'flare']);
+        $this->assertSame(1, \App\Game\PowerUps::inventory(User::where('name', 'Maya')->first())[$kind]);
+        $this->assertNull($this->as($runner)->getJson("/api/rooms/{$code}")->json('you.reward'));
+    }
 }

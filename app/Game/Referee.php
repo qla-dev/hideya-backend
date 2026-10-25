@@ -70,6 +70,7 @@ final class Referee
     public static function end(Room $room, string $outcome): void
     {
         $room->forceFill(['status' => 'ended', 'ended_at' => now(), 'outcome' => $outcome])->save();
+        PowerUps::rewardWinners($room->load('players'), $outcome);
         $room->bump();
         $fresh = $room->fresh('players');
         Realtime::room($fresh, 'ended');
