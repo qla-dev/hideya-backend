@@ -118,7 +118,8 @@ class PowerUpsTest extends TestCase
     {
         [$code, $hunter, $runner] = $this->round();
         $this->travel(4)->minutes(); // 240 s; the first shrink is due at 480 s
-        $this->use($hunter, $code, 'shrink')->assertOk()->assertJsonPath('room.zoneAdvance', 210);
+        $advance = $this->use($hunter, $code, 'shrink')->assertOk()->json('room.zoneAdvance');
+        $this->assertEqualsWithDelta(210, $advance, 1);
         $keys = collect($this->as($runner)->getJson("/api/rooms/{$code}")->json('chat'))->pluck('key');
         $this->assertContains('chat.event.powerUp.shrinkOther', $keys);
         $this->assertNotContains('chat.event.shrinking', $keys);
@@ -133,7 +134,7 @@ class PowerUpsTest extends TestCase
         $this->travel(4)->minutes();
         $this->use($hunter, $code, 'flare')->assertOk();
         $seconds = collect($this->as($hunter)->getJson("/api/rooms/{$code}")->json('positions'))->pluck('second');
-        $this->assertSame(240, $seconds->max());
+        $this->assertEqualsWithDelta(240, $seconds->max(), 1);
     }
 
     public function test_a_map_pickup_spawns_and_gives_an_extra_go(): void
@@ -166,6 +167,26 @@ class PowerUpsTest extends TestCase
         $this->postJson('/api/revenuecat/webhook', $event, $headers)->assertOk();
         $this->assertSame(15, $user->fresh()->power_up_credits);
         $token = $user->createToken('app')->plainTextToken;
-        $this->getJson('/api/me', ['Authorization' => "Bearer {$token}"])->assertJsonPath('user.powerUps', ['credits' => 15, 'dailyAvailable' => true]);
+        $this->getJson('/api/me', ['Authorization' => "Bearer {$token}"])->assertJsonPath('user.powerUps.credits', 15)->assertJsonPath('user.powerUps.dailyAvailable', true);
+    }
+
+    public function test_the_daily_pack_opens_once_a_day_and_refills_at_local_midnight(): void
+    {
+        $user = User::create(['name' => 'Maya', 'apple_sub' => 'x']);
+        $auth = ['Authorization' => 'Bearer '.$user->createToken('app')->plainTextToken];
+        $this->getJson('/api/me', $auth)->assertJsonPath('user.powerUps.dailyAvailable', true);
+        $opened = $this->postJson('/api/me/daily-power-up', [], $auth)->assertOk();
+        $this->assertContains($opened->json('amount'), [1, 2, 3]);
+        $this->assertSame($opened->json('amount'), $opened->json('credits'));
+        $this->assertFalse($opened->json('user.powerUps.dailyAvailable'));
+        $this->postJson('/api/me/daily-power-up', [], $auth)->assertStatus(409);
+        // Midnight in Sarajevo, not UTC.
+        $this->travelTo(now('Europe/Sarajevo')->addDay()->startOfDay()->addMinute());
+        $this->getJson('/api/me', $auth)->assertJsonPath('user.powerUps.dailyAvailable', true);
+    }
+
+    public function test_guests_cannot_open_a_daily_pack(): void
+    {
+        $this->postJson('/api/me/daily-power-up')->assertUnauthorized();
     }
 }

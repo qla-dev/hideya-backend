@@ -45,6 +45,7 @@ Route::middleware('throttle:180,1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
         Route::patch('/me', [AuthController::class, 'update']);
+        Route::post('/me/daily-power-up', [AuthController::class, 'claimDaily']);
         Route::delete('/me', [AuthController::class, 'destroy']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::post('/push-tokens', [AuthController::class, 'registerPush']);

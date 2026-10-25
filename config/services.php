@@ -46,6 +46,9 @@ return [
     ],
 
     // RevenueCat webhook (Authorization header value set in the RevenueCat dashboard).
+    // The free daily power-up refills at midnight here.
+    'hideya' => ['day_timezone' => env('HIDEYA_DAY_TIMEZONE', 'Europe/Sarajevo')],
+
     'revenuecat' => [
         'webhook_secret' => env('REVENUECAT_WEBHOOK_SECRET'),
     ],

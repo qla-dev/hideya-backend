@@ -62,9 +62,37 @@ final class PowerUps
         ];
     }
 
+    /** The free power-up refills at midnight in the game's home time zone. */
+    public static function today(): string
+    {
+        return now(config('services.hideya.day_timezone'))->toDateString();
+    }
+
+    public static function nextReset(): string
+    {
+        return now(config('services.hideya.day_timezone'))->addDay()->startOfDay()->utc()->toIso8601ZuluString();
+    }
+
     public static function dailyAvailable(User $user): bool
     {
-        return $user->daily_power_up_on?->toDateString() !== now()->toDateString();
+        return $user->daily_power_up_on?->toDateString() !== self::today();
+    }
+
+    /**
+     * Opening the daily pack: usually one power-up, sometimes two (rare) or
+     * three (legendary), added to the account's supply. Null when today's is gone.
+     */
+    public static function claimDaily(User $user): ?array
+    {
+        $user = User::lockForUpdate()->find($user->id);
+        if (! self::dailyAvailable($user)) {
+            return null;
+        }
+        $roll = random_int(1, 100);
+        [$amount, $rarity] = $roll <= 3 ? [3, 'legendary'] : ($roll <= 15 ? [2, 'rare'] : [1, 'common']);
+        $user->forceFill(['daily_power_up_on' => self::today(), 'power_up_credits' => $user->power_up_credits + $amount])->save();
+
+        return ['amount' => $amount, 'rarity' => $rarity, 'credits' => $user->power_up_credits];
     }
 
     public static function use(Room $room, Player $me, string $kind, ?array $point): void
@@ -138,7 +166,7 @@ final class PowerUps
         abort_if($usedOwn, 409, 'You’ve used this one this round. Grab a power-up on the map for another go.');
         $user = $me->user_id ? User::lockForUpdate()->find($me->user_id) : null;
         if ($user && self::dailyAvailable($user)) {
-            $user->forceFill(['daily_power_up_on' => now()->toDateString()])->save();
+            $user->forceFill(['daily_power_up_on' => self::today()])->save();
 
             return 'daily';
         }

@@ -44,6 +44,15 @@ class AuthController extends Controller
         return response()->json(['user' => self::present($request->user())]);
     }
 
+    /** Open today's free power-up pack (registered players only). */
+    public function claimDaily(Request $request): JsonResponse
+    {
+        $result = DB::transaction(fn () => \App\Game\PowerUps::claimDaily($request->user()));
+        abort_unless($result, 409, 'You’ve opened today’s power-up. The next one comes at midnight.');
+
+        return response()->json($result + ['user' => self::present($request->user()->fresh())]);
+    }
+
     public function update(Request $request): JsonResponse
     {
         $data = $request->validate(['name' => ['required', 'string', 'max:24']]);
@@ -109,7 +118,7 @@ class AuthController extends Controller
             'provider' => $user->apple_sub ? 'apple' : ($user->google_sub ? 'google' : null),
             // RevenueCat app user ID, so purchases attach to this account on every device.
             'revenueCatId' => "hideya_{$user->id}",
-            'powerUps' => ['credits' => (int) $user->power_up_credits, 'dailyAvailable' => \App\Game\PowerUps::dailyAvailable($user)],
+            'powerUps' => ['credits' => (int) $user->power_up_credits, 'dailyAvailable' => \App\Game\PowerUps::dailyAvailable($user), 'nextDailyAt' => \App\Game\PowerUps::nextReset()],
         ];
     }
 }
