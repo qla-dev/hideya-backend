@@ -50,7 +50,7 @@ class AccountTest extends TestCase
         $signIn = $this->postJson('/api/auth/google', ['idToken' => 'valid-google'])->assertCreated();
         $auth = ['Authorization' => 'Bearer '.$signIn->json('token')];
 
-        $this->getJson('/api/me', $auth)->assertOk()->assertJsonPath('user.email', 'leo@example.com')->assertJsonPath('user.hostingUnlocked', false);
+        $this->getJson('/api/me', $auth)->assertOk()->assertJsonPath('user.email', 'leo@example.com');
         $this->patchJson('/api/me', ['name' => 'Leo B'], $auth)->assertOk()->assertJsonPath('user.name', 'Leo B');
         $this->postJson('/api/push-tokens', ['token' => 'ExponentPushToken[abc]', 'platform' => 'ios'], $auth)->assertOk();
         $this->postJson('/api/push-tokens', ['token' => 'not-expo'], $auth)->assertUnprocessable();
@@ -67,22 +67,17 @@ class AccountTest extends TestCase
         $this->getJson('/api/rooms/'.$room->json('room.code'), ['X-Player-Token' => $room->json('token')])->assertOk();
     }
 
-    public function test_revenuecat_webhook_unlocks_hosting(): void
+    public function test_revenuecat_webhook_needs_its_secret(): void
     {
         config(['services.revenuecat.webhook_secret' => 'Bearer rc-secret']);
-        $user = User::create(['name' => 'Maya', 'apple_sub' => 'x']);
-        $event = ['event' => ['type' => 'NON_RENEWING_PURCHASE', 'app_user_id' => "hideya_{$user->id}", 'entitlement_ids' => ['hosting']]];
+        $event = ['event' => ['type' => 'NON_RENEWING_PURCHASE', 'app_user_id' => 'hideya_1']];
 
         $this->postJson('/api/revenuecat/webhook', $event)->assertUnauthorized();
         $this->postJson('/api/revenuecat/webhook', $event, ['Authorization' => 'Bearer rc-secret'])->assertOk();
-        $this->assertNotNull($user->fresh()->hosting_unlocked_at);
     }
 
-    public function test_hosting_can_require_the_purchase(): void
+    public function test_hosting_is_free_without_an_account(): void
     {
-        config(['services.revenuecat.require_for_hosting' => true]);
-        $this->postJson('/api/rooms', ['name' => 'Maya'])->assertStatus(402);
-        $user = User::create(['name' => 'Maya', 'apple_sub' => 'x', 'hosting_unlocked_at' => now()]);
-        $this->actingAs($user, 'sanctum')->postJson('/api/rooms', ['name' => 'Maya'])->assertCreated();
+        $this->postJson('/api/rooms', ['name' => 'Maya'])->assertCreated();
     }
 }

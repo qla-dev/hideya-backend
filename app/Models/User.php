@@ -27,7 +27,6 @@ class User extends Authenticatable
         'password',
         'apple_sub',
         'google_sub',
-        'hosting_unlocked_at',
     ];
 
     /**
@@ -51,7 +50,6 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'hosting_unlocked_at' => 'datetime',
             'password' => 'hashed',
         ];
     }

@@ -45,12 +45,9 @@ return [
         'client_ids' => array_values(array_filter(array_map('trim', explode(',', (string) env('GOOGLE_CLIENT_IDS', ''))))),
     ],
 
-    // RevenueCat webhook (Authorization header value set in the RevenueCat dashboard) and the hosting entitlement.
+    // RevenueCat webhook (Authorization header value set in the RevenueCat dashboard).
     'revenuecat' => [
         'webhook_secret' => env('REVENUECAT_WEBHOOK_SECRET'),
-        'hosting_entitlement' => env('REVENUECAT_HOSTING_ENTITLEMENT', 'hosting'),
-        // Off until the store products exist: then creating a room needs the hosting unlock.
-        'require_for_hosting' => (bool) env('HOSTING_REQUIRES_PURCHASE', false),
     ],
 
     // Expo push service; an access token is only needed if "enhanced push security" is turned on.

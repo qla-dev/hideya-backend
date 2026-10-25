@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
  * Accounts from Sign in with Apple and Google. The app sends the provider's
  * identity token; the API verifies it and answers with a Sanctum token for
  * `Authorization: Bearer`. Accounts are optional for play: they carry the name,
- * push notifications and the hosting unlock across devices.
+ * push notifications across devices.
  */
 class AuthController extends Controller
 {
@@ -107,7 +107,6 @@ class AuthController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'provider' => $user->apple_sub ? 'apple' : ($user->google_sub ? 'google' : null),
-            'hostingUnlocked' => $user->hosting_unlocked_at !== null,
             // RevenueCat app user ID, so purchases attach to this account on every device.
             'revenueCatId' => "hideya_{$user->id}",
         ];

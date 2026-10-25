@@ -9,7 +9,7 @@ Push to `main`, then open `https://qla.dev/hideya/endpoints/redeploy.php` (git p
 ## Authentication
 
 - **Room player:** creating or joining a room returns a `token`. Send it as `X-Player-Token: <token>` on every room request and on `/api/realtime/auth`. Only its SHA-256 is stored.
-- **Account (optional):** Sign in with Apple or Google returns a Sanctum token for `Authorization: Bearer <token>`. Sent with create/join, it links the player to the account (push notifications, hosting unlock). Apple tokens are checked against Apple's keys, audience `APPLE_CLIENT_IDS` (default `hideya.qla.dev`) and the hashed nonce; Google tokens against Google's keys and `GOOGLE_CLIENT_IDS`.
+- **Account (optional):** Sign in with Apple or Google returns a Sanctum token for `Authorization: Bearer <token>`. Sent with create/join, it links the player to the account (push notifications). Hosting and playing never need an account or a purchase. Apple tokens are checked against Apple's keys, audience `APPLE_CLIENT_IDS` (default `hideya.qla.dev`) and the hashed nonce; Google tokens against Google's keys and `GOOGLE_CLIENT_IDS`.
 
 ## Endpoints
 
@@ -33,9 +33,9 @@ Push to `main`, then open `https://qla.dev/hideya/endpoints/redeploy.php` (git p
 | GET / PATCH / DELETE | `/api/me` | account | read, `name`, delete account (App Store requirement) |
 | POST | `/api/auth/logout` | account | revokes this token |
 | POST / DELETE | `/api/push-tokens` | account | `token` (`ExponentPushToken[...]`), `platform?` |
-| POST | `/api/revenuecat/webhook` | RevenueCat | `Authorization` = `REVENUECAT_WEBHOOK_SECRET`; grants hosting for entitlement `REVENUECAT_HOSTING_ENTITLEMENT` (default `hosting`) to app user `hideya_{userId}` |
+| POST | `/api/revenuecat/webhook` | RevenueCat | `Authorization` = `REVENUECAT_WEBHOOK_SECRET`; app user `hideya_{userId}`. Acknowledges events; power-up packs will be credited here |
 
-Push notifications go through Expo's push service to signed-in players' devices: round start, hunters out, pings (per team), zone shrink warning, round over. `HOSTING_REQUIRES_PURCHASE=true` makes creating a room require the hosting unlock (off until the store products exist).
+Push notifications go through Expo's push service to signed-in players' devices: round start, hunters out, pings (per team), zone shrink warning, round over.
 
 Rules (minutes unless noted): `roundLength` 10–180, `ping` 0–30 (0 = off), `headStart` 0–15, `zone` bool, `zoneSize` 200–3000 m, `shrinkEvery` 0–15. Defaults match the app: 30 / 2 / 3 / on / 420 / 5.
 

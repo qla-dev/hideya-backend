@@ -31,10 +31,8 @@ class RoomController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate(['name' => ['required', 'string', 'max:24'], ...self::centerRules(), ...Rules::validation()]);
+        // Hosting is free, for everyone, always.
         $user = $request->user('sanctum');
-        if (config('services.revenuecat.require_for_hosting')) {
-            abort_unless($user?->hosting_unlocked_at, 402, 'Unlock hosting to start a game.');
-        }
 
         [$room, $player, $token] = DB::transaction(function () use ($data, $user) {
             $room = Room::create([
