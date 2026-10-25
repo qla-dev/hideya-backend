@@ -38,6 +38,7 @@ class AccountTest extends TestCase
     {
         $first = $this->postJson('/api/auth/apple', ['identityToken' => 'valid-apple', 'name' => 'Maya'])->assertCreated();
         $this->assertSame('Maya', $first->json('user.name'));
+        $this->assertSame('apple', $first->json('user.provider'));
         $this->assertSame('hideya_'.$first->json('user.id'), $first->json('user.revenueCatId'));
         $this->postJson('/api/auth/apple', ['identityToken' => 'valid-apple'])->assertOk()->assertJsonPath('user.id', $first->json('user.id'));
         $this->postJson('/api/auth/apple', ['identityToken' => 'forged'])->assertUnprocessable();

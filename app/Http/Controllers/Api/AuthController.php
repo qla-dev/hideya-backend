@@ -106,6 +106,7 @@ class AuthController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'provider' => $user->apple_sub ? 'apple' : ($user->google_sub ? 'google' : null),
             'hostingUnlocked' => $user->hosting_unlocked_at !== null,
             // RevenueCat app user ID, so purchases attach to this account on every device.
             'revenueCatId' => "hideya_{$user->id}",
