@@ -77,10 +77,10 @@ class PowerUpsTest extends TestCase
         $this->use($hunter, $code, 'flare')->assertOk()->assertJsonPath('you.powerUps.daily', false)->assertJsonPath('you.powerUps.used', ['flare']);
         // Same kind again this round: no.
         $this->use($hunter, $code, 'flare')->assertStatus(409);
-        // The daily one is spent and there are no credits.
+        // The daily one is spent and none of this kind is owned.
         $this->use($hunter, $code, 'shrink')->assertStatus(402);
-        User::where('name', 'Maya')->update(['power_up_credits' => 2]);
-        $this->use($hunter, $code, 'shrink')->assertOk()->assertJsonPath('you.powerUps.credits', 1);
+        User::where('name', 'Maya')->first()->forceFill(['power_ups' => ['shrink' => 2]])->save();
+        $this->use($hunter, $code, 'shrink')->assertOk()->assertJsonPath('you.powerUps.inventory.shrink', 1);
     }
 
     public function test_ghost_leaves_the_runner_out_of_pings(): void
@@ -165,9 +165,13 @@ class PowerUpsTest extends TestCase
         $headers = ['Authorization' => 'Bearer rc-secret'];
         $this->postJson('/api/revenuecat/webhook', $event, $headers)->assertOk();
         $this->postJson('/api/revenuecat/webhook', $event, $headers)->assertOk();
-        $this->assertSame(15, $user->fresh()->power_up_credits);
+        $owned = \App\Game\PowerUps::inventory($user->fresh());
+        $this->assertSame(15, array_sum($owned));
+        foreach ($owned as $count) {
+            $this->assertContains($count, [3, 4], 'an even mix of the four kinds');
+        }
         $token = $user->createToken('app')->plainTextToken;
-        $this->getJson('/api/me', ['Authorization' => "Bearer {$token}"])->assertJsonPath('user.powerUps.credits', 15)->assertJsonPath('user.powerUps.dailyAvailable', true);
+        $this->getJson('/api/me', ['Authorization' => "Bearer {$token}"])->assertJsonPath('user.powerUps.inventory', $owned)->assertJsonPath('user.powerUps.dailyAvailable', true);
     }
 
     public function test_the_daily_pack_opens_once_a_day_and_refills_at_local_midnight(): void
@@ -177,11 +181,12 @@ class PowerUpsTest extends TestCase
         $this->getJson('/api/me', $auth)->assertJsonPath('user.powerUps.dailyAvailable', true);
         $opened = $this->postJson('/api/me/daily-power-up', [], $auth)->assertOk();
         $this->assertContains($opened->json('amount'), [1, 2, 3]);
-        $this->assertSame($opened->json('amount'), $opened->json('credits'));
+        $this->assertContains($opened->json('kind'), ['ghost', 'decoy', 'shrink', 'flare']);
+        $this->assertSame($opened->json('amount'), $opened->json('inventory.'.$opened->json('kind')));
         $this->assertFalse($opened->json('user.powerUps.dailyAvailable'));
         // Opening it again (an interrupted reveal) shows the same drop and adds nothing.
         $this->postJson('/api/me/daily-power-up', [], $auth)->assertOk()->assertJsonPath('repeat', true)
-            ->assertJsonPath('amount', $opened->json('amount'))->assertJsonPath('credits', $opened->json('credits'));
+            ->assertJsonPath('kind', $opened->json('kind'))->assertJsonPath('amount', $opened->json('amount'))->assertJsonPath('inventory', $opened->json('inventory'));
         // Midnight in Sarajevo, not UTC.
         $this->travelTo(now('Europe/Sarajevo')->addDay()->startOfDay()->addMinute());
         $this->getJson('/api/me', $auth)->assertJsonPath('user.powerUps.dailyAvailable', true);

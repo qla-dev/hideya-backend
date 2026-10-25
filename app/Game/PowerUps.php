@@ -9,7 +9,7 @@ use App\Models\User;
 
 /**
  * Power-ups: two per team, each usable once per round from the player's own
- * supply (the registered daily one, then bought credits), plus any extra
+ * supply (owned by kind: the daily pack and bought packs), plus any extra
  * charges picked up on the map. Never during the head start, and only when the
  * host left power-ups on.
  *
@@ -56,7 +56,7 @@ final class PowerUps
             'used' => $uses->where('source', '!=', 'pickup')->pluck('kind')->unique()->values()->all(),
             'charges' => (int) $player->power_up_charges,
             'daily' => $user ? self::dailyAvailable($user) : null,
-            'credits' => $user ? (int) $user->power_up_credits : null,
+            'inventory' => $user ? self::inventory($user) : null,
             'ghostUntil' => $ghost,
             'decoyPending' => $uses->where('kind', 'decoy')->whereNull('ends_second')->isNotEmpty(),
         ];
@@ -73,16 +73,29 @@ final class PowerUps
         return now(config('services.hideya.day_timezone'))->addDay()->startOfDay()->utc()->toIso8601ZuluString();
     }
 
+    /** How many of each kind the account owns. */
+    public static function inventory(User $user): array
+    {
+        return array_map('intval', array_merge(array_fill_keys(array_keys(self::KINDS), 0), $user->power_ups ?? []));
+    }
+
+    private static function add(User $user, string $kind, int $amount): void
+    {
+        $owned = self::inventory($user);
+        $owned[$kind] += $amount;
+        $user->power_ups = $owned;
+    }
+
     public static function dailyAvailable(User $user): bool
     {
         return $user->daily_power_up_on?->toDateString() !== self::today();
     }
 
     /**
-     * Opening the daily pack: usually one power-up, sometimes two (rare) or
-     * three (legendary), added to the account's supply. Opening it again the
-     * same day returns that same drop without adding anything (an interrupted
-     * reveal can finish). Null when today's was spent without a pack (in a round).
+     * Opening the daily pack: one of the four kinds, usually one of it,
+     * sometimes two (rare) or three (legendary). Opening it again the same day
+     * returns that same drop without adding anything (an interrupted reveal can
+     * finish). Null when today's was spent without a pack (in a round).
      */
     public static function claimDaily(User $user): ?array
     {
@@ -90,17 +103,21 @@ final class PowerUps
         if (! self::dailyAvailable($user)) {
             $drop = $user->daily_power_up_drop;
 
-            return ($drop['on'] ?? null) === self::today() ? ['amount' => $drop['amount'], 'rarity' => $drop['rarity'], 'credits' => $user->power_up_credits, 'repeat' => true] : null;
+            return ($drop['on'] ?? null) === self::today() && isset($drop['kind'])
+                ? ['kind' => $drop['kind'], 'amount' => $drop['amount'], 'rarity' => $drop['rarity'], 'inventory' => self::inventory($user), 'repeat' => true]
+                : null;
         }
         $roll = random_int(1, 100);
         [$amount, $rarity] = $roll <= 3 ? [3, 'legendary'] : ($roll <= 15 ? [2, 'rare'] : [1, 'common']);
+        $kinds = array_keys(self::KINDS);
+        $kind = $kinds[random_int(0, count($kinds) - 1)];
+        self::add($user, $kind, $amount);
         $user->forceFill([
             'daily_power_up_on' => self::today(),
-            'daily_power_up_drop' => ['on' => self::today(), 'amount' => $amount, 'rarity' => $rarity],
-            'power_up_credits' => $user->power_up_credits + $amount,
+            'daily_power_up_drop' => ['on' => self::today(), 'kind' => $kind, 'amount' => $amount, 'rarity' => $rarity],
         ])->save();
 
-        return ['amount' => $amount, 'rarity' => $rarity, 'credits' => $user->power_up_credits, 'repeat' => false];
+        return ['kind' => $kind, 'amount' => $amount, 'rarity' => $rarity, 'inventory' => self::inventory($user), 'repeat' => false];
     }
 
     public static function use(Room $room, Player $me, string $kind, ?array $point): void
@@ -162,7 +179,11 @@ final class PowerUps
         };
     }
 
-    /** A pickup charge first (it does not count against once per round), then the daily one, then credits. */
+    /**
+     * A pickup charge first (it does not count against once per round), then
+     * one of this kind the player owns; an unopened daily pack is opened as
+     * this kind rather than wasted.
+     */
     private static function spend(Room $room, Player $me, string $kind): string
     {
         if ($me->power_up_charges > 0) {
@@ -173,17 +194,21 @@ final class PowerUps
         $usedOwn = PowerUpUse::where('room_id', $room->id)->where('player_id', $me->id)->where('kind', $kind)->where('source', '!=', 'pickup')->exists();
         abort_if($usedOwn, 409, 'You’ve used this one this round. Grab a power-up on the map for another go.');
         $user = $me->user_id ? User::lockForUpdate()->find($me->user_id) : null;
+        if ($user && self::inventory($user)[$kind] > 0) {
+            self::add($user, $kind, -1);
+            $user->save();
+
+            return 'owned';
+        }
         if ($user && self::dailyAvailable($user)) {
-            $user->forceFill(['daily_power_up_on' => self::today()])->save();
+            $user->forceFill([
+                'daily_power_up_on' => self::today(),
+                'daily_power_up_drop' => ['on' => self::today(), 'kind' => $kind, 'amount' => 1, 'rarity' => 'common'],
+            ])->save();
 
             return 'daily';
         }
-        if ($user && $user->power_up_credits > 0) {
-            $user->decrement('power_up_credits');
-
-            return 'credit';
-        }
-        abort(402, $user ? 'No power-ups left. Get a pack, or grab one on the map.' : 'Sign in to get a free power-up every day, or grab one on the map.');
+        abort(402, $user ? 'You have none of this one. Get more power-ups, or grab one on the map.' : 'Sign in to get a free power-up every day, or grab one on the map.');
     }
 
     private static function bringShrinkForward(Room $room, float $t, Player $me): void
@@ -275,14 +300,23 @@ final class PowerUps
         return true;
     }
 
-    /** RevenueCat purchase of a pack: credit it once per event. */
+    /** RevenueCat purchase of a pack: a mix of all four kinds (an even share each, the rest at random). */
     public static function creditPack(User $user, string $productId): bool
     {
         $amount = self::PACKS[$productId] ?? 0;
-        if ($amount > 0) {
-            $user->increment('power_up_credits', $amount);
+        if ($amount <= 0) {
+            return false;
         }
+        $kinds = array_keys(self::KINDS);
+        foreach ($kinds as $kind) {
+            self::add($user, $kind, intdiv($amount, 4));
+        }
+        shuffle($kinds);
+        foreach (array_slice($kinds, 0, $amount % 4) as $kind) {
+            self::add($user, $kind, 1);
+        }
+        $user->save();
 
-        return $amount > 0;
+        return true;
     }
 }
