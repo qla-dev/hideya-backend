@@ -5,11 +5,20 @@ use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
-// Production lives at /hideya/endpoints. The parent .htaccess forwards clean
-// URLs into public/ while REQUEST_URI keeps the prefix, so present the front
-// controller at the prefix: Laravel then treats it as the base path.
-$deploymentPrefix = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '', 2), '/\');
+// Production files live in /dist/hideya/endpoints and qla.dev's root
+// .htaccess also maps the public URL /hideya/endpoints onto them. REQUEST_URI
+// keeps whichever prefix was requested, so take the folder path and drop
+// leading segments until it matches; present the front controller there so
+// Laravel treats that prefix as its base path.
 $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+$deploymentPrefix = rtrim(str_replace(chr(92), '/', dirname($_SERVER['SCRIPT_NAME'] ?? '', 2)), '/');
+while (
+    $deploymentPrefix !== ''
+    && $requestUri !== $deploymentPrefix
+    && ! str_starts_with($requestUri, $deploymentPrefix.'/')
+) {
+    $deploymentPrefix = (string) preg_replace('#^/[^/]+#', '', $deploymentPrefix);
+}
 if (
     $deploymentPrefix !== ''
     && ($requestUri === $deploymentPrefix || str_starts_with($requestUri, $deploymentPrefix.'/'))
