@@ -80,19 +80,27 @@ final class PowerUps
 
     /**
      * Opening the daily pack: usually one power-up, sometimes two (rare) or
-     * three (legendary), added to the account's supply. Null when today's is gone.
+     * three (legendary), added to the account's supply. Opening it again the
+     * same day returns that same drop without adding anything (an interrupted
+     * reveal can finish). Null when today's was spent without a pack (in a round).
      */
     public static function claimDaily(User $user): ?array
     {
         $user = User::lockForUpdate()->find($user->id);
         if (! self::dailyAvailable($user)) {
-            return null;
+            $drop = $user->daily_power_up_drop;
+
+            return ($drop['on'] ?? null) === self::today() ? ['amount' => $drop['amount'], 'rarity' => $drop['rarity'], 'credits' => $user->power_up_credits, 'repeat' => true] : null;
         }
         $roll = random_int(1, 100);
         [$amount, $rarity] = $roll <= 3 ? [3, 'legendary'] : ($roll <= 15 ? [2, 'rare'] : [1, 'common']);
-        $user->forceFill(['daily_power_up_on' => self::today(), 'power_up_credits' => $user->power_up_credits + $amount])->save();
+        $user->forceFill([
+            'daily_power_up_on' => self::today(),
+            'daily_power_up_drop' => ['on' => self::today(), 'amount' => $amount, 'rarity' => $rarity],
+            'power_up_credits' => $user->power_up_credits + $amount,
+        ])->save();
 
-        return ['amount' => $amount, 'rarity' => $rarity, 'credits' => $user->power_up_credits];
+        return ['amount' => $amount, 'rarity' => $rarity, 'credits' => $user->power_up_credits, 'repeat' => false];
     }
 
     public static function use(Room $room, Player $me, string $kind, ?array $point): void

@@ -179,7 +179,9 @@ class PowerUpsTest extends TestCase
         $this->assertContains($opened->json('amount'), [1, 2, 3]);
         $this->assertSame($opened->json('amount'), $opened->json('credits'));
         $this->assertFalse($opened->json('user.powerUps.dailyAvailable'));
-        $this->postJson('/api/me/daily-power-up', [], $auth)->assertStatus(409);
+        // Opening it again (an interrupted reveal) shows the same drop and adds nothing.
+        $this->postJson('/api/me/daily-power-up', [], $auth)->assertOk()->assertJsonPath('repeat', true)
+            ->assertJsonPath('amount', $opened->json('amount'))->assertJsonPath('credits', $opened->json('credits'));
         // Midnight in Sarajevo, not UTC.
         $this->travelTo(now('Europe/Sarajevo')->addDay()->startOfDay()->addMinute());
         $this->getJson('/api/me', $auth)->assertJsonPath('user.powerUps.dailyAvailable', true);
