@@ -1,59 +1,66 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Hideya API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laravel 12 backend for Hideya's private rooms, with Pusher Channels for realtime. Production: `https://qla.dev/hideya/endpoints/api/...` (files in `public_html/qla.dev/dist/hideya/endpoints`).
 
-## About Laravel
+## Deploy
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Push to `main`, then open `https://qla.dev/hideya/endpoints/redeploy.php` (git pull, composer install, caches). It does not migrate: run `php artisan migrate` for a release that adds a migration.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Authentication
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Creating or joining a room returns a `token`. Send it as `Authorization: Bearer <token>` on every room request and on `/api/realtime/auth`. Only its SHA-256 is stored.
 
-## Learning Laravel
+## Endpoints
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+| Method | Path | Who | Body |
+| --- | --- | --- | --- |
+| GET | `/api/health` | anyone | |
+| POST | `/api/rooms` | anyone | `name`, `center?{latitude,longitude}`, `rules?` → `201 {token, ...state}` (you host) |
+| POST | `/api/rooms/{code}/join` | anyone | `name` → `201 {token, ...state}` (lobby only, max 20) |
+| GET | `/api/rooms/{code}` | player | bootstrap / recover |
+| PATCH | `/api/rooms/{code}` | host, lobby | `rules?`, `center?` |
+| PATCH | `/api/rooms/{code}/me` | player, lobby | `name?`, `pick? (hunter\|runner\|random)`, `ready?` |
+| POST | `/api/rooms/{code}/start` | host | assigns teams, starts the clock |
+| POST | `/api/rooms/{code}/location` | player | `latitude`, `longitude` (send every ~5 s; doubles as heartbeat) |
+| POST | `/api/rooms/{code}/radio` | player in round | `text` (≤ 300, own team only) |
+| POST | `/api/rooms/{code}/tagged` | runner | honour-system tag |
+| POST | `/api/rooms/{code}/end` | host | ends the round (`cancelled`) |
+| POST | `/api/rooms/{code}/leave` | player | host passes to the next player |
+| POST | `/api/realtime/auth` | player | Pusher `socket_id`, `channel_name` |
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Rules (minutes unless noted): `roundLength` 10–180, `ping` 0–30 (0 = off), `headStart` 0–15, `zone` bool, `zoneSize` 200–3000 m, `shrinkEvery` 0–15. Defaults match the app: 30 / 2 / 3 / on / 420 / 5.
 
-## Laravel Sponsors
+Every room response is the viewer's state:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+```
+{ room: { code, status, rules, center, startedAt, headStartEndsAt, endsAt, endedAt, outcome, revision, serverTime, players: [...] },
+  you: { id, team, host },
+  positions: [ { id, lat, lng, live, at, second? } ],
+  radio: [ { id, kind, playerId, name, text, key, values, team, at, second } ],
+  realtime: { provider, key, cluster, authEndpoint, channels, events, heartbeatSeconds } }
+```
 
-### Premium Partners
+Apply a response or event only when its `revision` is newer than the one you hold; use `serverTime` and the round timestamps for clocks.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## Visibility
 
-## Contributing
+- Teammates see each other live.
+- Hunters also see untagged runners **where they were at the last ping** (`live: false`, `second`).
+- Runners never receive hunter positions, from the API or from realtime.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Realtime (Pusher)
 
-## Code of Conduct
+| Channel | Event | Payload |
+| --- | --- | --- |
+| `private-room.{code}` | `room.updated` | `{reason, revision, room}`: joined, rules, player, started, tagged, left, ended |
+| `private-room.{code}.{team}` | `team.updated` | `{type: location, position}`, `{type: radio, message}`, hunters only: `{type: ping, second, positions}` |
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+`/api/realtime/auth` signs only the caller's room channel and own team channel. Events are sent immediately (no queue worker), as in miseryindex; a Pusher failure is logged and never fails the request.
 
-## Security Vulnerabilities
+There is no cron. Every room request runs the referee, which announces what has fallen due since the last request (head start over, pings with the hunters' snapshot, zone shrink warnings) and ends the round when time runs out (`runnersWin`) or every runner is tagged (`huntersWin`). Location updates every few seconds keep it on time.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## Tests
 
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```
+DB_CONNECTION=sqlite DB_DATABASE=:memory: php artisan test
+```
