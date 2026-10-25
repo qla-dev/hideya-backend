@@ -118,7 +118,7 @@ class AuthController extends Controller
             'provider' => $user->apple_sub ? 'apple' : ($user->google_sub ? 'google' : null),
             // RevenueCat app user ID, so purchases attach to this account on every device.
             'revenueCatId' => "hideya_{$user->id}",
-            'powerUps' => ['inventory' => \App\Game\PowerUps::inventory($user), 'dailyAvailable' => \App\Game\PowerUps::dailyAvailable($user), 'nextDailyAt' => \App\Game\PowerUps::nextReset()],
+            'powerUps' => ['inventory' => \App\Game\PowerUps::inventory($user), 'dailyAvailable' => \App\Game\PowerUps::dailyAvailable($user), 'nextDailyAt' => \App\Game\PowerUps::nextReset(), 'plus' => \App\Game\PowerUps::plus($user), 'plusUntil' => $user->plus_until?->toIso8601ZuluString()],
         ];
     }
 }

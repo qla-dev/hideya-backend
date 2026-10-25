@@ -52,6 +52,7 @@ class User extends Authenticatable
             'daily_power_up_on' => 'date',
             'daily_power_up_drop' => 'array',
             'power_ups' => 'array',
+            'plus_until' => 'datetime',
             'power_up_credits' => 'integer',
             'email_verified_at' => 'datetime',
             'password' => 'hashed',

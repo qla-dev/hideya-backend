@@ -24,6 +24,16 @@ final class PowerUps
     /** Packs sold through RevenueCat (non-consumable ids are not used). */
     public const PACKS = ['hideya_powerups_5' => 5, 'hideya_powerups_15' => 15, 'hideya_powerups_40' => 40];
 
+    /** Hideya Plus: the monthly subscription; its daily pack holds two more. */
+    public const PLUS_PRODUCT = 'hideya_plus_monthly';
+
+    public const PLUS_DAILY_BONUS = 2;
+
+    public static function plus(User $user): bool
+    {
+        return $user->plus_until !== null && $user->plus_until->isFuture();
+    }
+
     public const GHOST_WITHOUT_ZONE = 240;
 
     public const SHRINK_WARNING = 30;
@@ -109,6 +119,9 @@ final class PowerUps
         }
         $roll = random_int(1, 100);
         [$amount, $rarity] = $roll <= 3 ? [3, 'legendary'] : ($roll <= 15 ? [2, 'rare'] : [1, 'common']);
+        if (self::plus($user)) {
+            $amount += self::PLUS_DAILY_BONUS;
+        }
         $kinds = array_keys(self::KINDS);
         $kind = $kinds[random_int(0, count($kinds) - 1)];
         self::add($user, $kind, $amount);

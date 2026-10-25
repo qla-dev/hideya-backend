@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * RevenueCat webhook (the app logs in to RevenueCat as `hideya_{userId}`).
  * Hosting and playing are free; what is sold is power-up packs, credited to
- * the account once per RevenueCat event.
+ * the account once per RevenueCat event, and Hideya Plus, kept in step with
+ * the subscription's expiry.
  */
 class RevenueCatController extends Controller
 {
@@ -25,6 +26,14 @@ class RevenueCatController extends Controller
         $id = (string) ($event['id'] ?? '');
         $isPurchase = in_array($event['type'] ?? '', ['NON_RENEWING_PURCHASE', 'INITIAL_PURCHASE'], true);
         $user = self::user($event['app_user_id'] ?? null);
+        if ($user && ($event['product_id'] ?? '') === PowerUps::PLUS_PRODUCT) {
+            $type = $event['type'] ?? '';
+            if (in_array($type, ['INITIAL_PURCHASE', 'RENEWAL', 'UNCANCELLATION', 'PRODUCT_CHANGE'], true) && isset($event['expiration_at_ms'])) {
+                $user->forceFill(['plus_until' => \Illuminate\Support\Carbon::createFromTimestampMs((int) $event['expiration_at_ms'])])->save();
+            } elseif ($type === 'EXPIRATION') {
+                $user->forceFill(['plus_until' => null])->save();
+            }
+        }
         if ($id !== '' && $isPurchase && $user && isset(PowerUps::PACKS[$event['product_id'] ?? ''])) {
             DB::transaction(function () use ($id, $user, $event) {
                 if (DB::table('revenuecat_events')->where('id', $id)->lockForUpdate()->exists()) {

@@ -209,4 +209,21 @@ class PowerUpsTest extends TestCase
         $this->assertSame(1, \App\Game\PowerUps::inventory(User::where('name', 'Maya')->first())[$kind]);
         $this->assertNull($this->as($runner)->getJson("/api/rooms/{$code}")->json('you.reward'));
     }
+
+    public function test_plus_subscription_adds_two_to_the_daily_pack(): void
+    {
+        config(['services.revenuecat.webhook_secret' => 'Bearer rc-secret']);
+        $user = User::create(['name' => 'Maya', 'apple_sub' => 'x']);
+        $headers = ['Authorization' => 'Bearer rc-secret'];
+        $event = ['event' => ['id' => 'evt-plus', 'type' => 'INITIAL_PURCHASE', 'app_user_id' => "hideya_{$user->id}", 'product_id' => 'hideya_plus_monthly', 'expiration_at_ms' => now()->addMonth()->getTimestampMs()]];
+        $this->postJson('/api/revenuecat/webhook', $event, $headers)->assertOk();
+        $auth = ['Authorization' => 'Bearer '.$user->createToken('app')->plainTextToken];
+        $this->getJson('/api/me', $auth)->assertJsonPath('user.powerUps.plus', true);
+        $opened = $this->postJson('/api/me/daily-power-up', [], $auth)->assertOk();
+        $this->assertGreaterThanOrEqual(3, $opened->json('amount'));
+        $expired = ['event' => ['id' => 'evt-exp', 'type' => 'EXPIRATION', 'app_user_id' => "hideya_{$user->id}", 'product_id' => 'hideya_plus_monthly']];
+        $this->postJson('/api/revenuecat/webhook', $expired, $headers)->assertOk();
+        $this->app['auth']->forgetGuards(); // the test client keeps the signed-in user between requests
+        $this->getJson('/api/me', $auth)->assertJsonPath('user.powerUps.plus', false);
+    }
 }
