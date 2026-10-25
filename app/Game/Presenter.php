@@ -30,6 +30,10 @@ final class Presenter
             'endsAt' => self::time($started?->copy()->addSeconds($room->roundSeconds())),
             'endedAt' => self::time($room->ended_at),
             'outcome' => $room->outcome,
+            // Shrink now moved the zone schedule ahead by this many seconds.
+            'zoneAdvance' => (int) $room->zone_advance,
+            // A power-up on the map, for both teams: [lat, lng, the round second it goes].
+            'pickup' => $room->pickup ? ['latitude' => $room->pickup['lat'], 'longitude' => $room->pickup['lng'], 'expires' => $room->pickup['expires']] : null,
             'revision' => $room->revision,
             'serverTime' => self::time(now()),
             'players' => $room->players->sortBy('id')->values()->map(fn (Player $p) => [
@@ -50,7 +54,7 @@ final class Presenter
     {
         return [
             'room' => self::publicState($room),
-            'you' => ['id' => $viewer->id, 'team' => $viewer->team, 'host' => $viewer->is_host],
+            'you' => ['id' => $viewer->id, 'team' => $viewer->team, 'host' => $viewer->is_host, 'powerUps' => PowerUps::stateFor($room, $viewer)],
             'positions' => self::positionsFor($room, $viewer),
             'chat' => self::chatFor($room, $viewer),
             'realtime' => Realtime::clientConfig($room, $viewer),

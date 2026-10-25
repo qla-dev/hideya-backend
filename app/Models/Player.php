@@ -21,6 +21,7 @@ class Player extends Model
             'located_at' => 'datetime',
             'tagged_at' => 'datetime',
             'left_at' => 'datetime',
+            'power_up_charges' => 'integer',
         ];
     }
 

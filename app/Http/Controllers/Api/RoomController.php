@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Game\Presenter;
+use App\Game\PowerUps;
 use App\Game\Push;
 use App\Game\Realtime;
 use App\Game\Referee;
@@ -133,7 +134,8 @@ class RoomController extends Controller
                 Realtime::team($room, $me->team, ['type' => 'location', 'position' => Presenter::position($me)]);
             }
 
-            return null; // positions are team events; the roster did not change
+            // Walking onto the map's power-up takes it (the room changes for everyone).
+            return PowerUps::collect($room, $me) ? 'pickup' : null; // otherwise positions are team events
         });
     }
 
@@ -148,6 +150,22 @@ class RoomController extends Controller
             Realtime::team($room, $me->team, ['type' => 'chat', 'message' => Presenter::message($message, $room->load('players'))]);
 
             return null;
+        });
+    }
+
+    public function powerUp(Request $request, string $code): JsonResponse
+    {
+        $data = $request->validate([
+            'kind' => ['required', 'in:'.implode(',', array_keys(PowerUps::KINDS))],
+            'point' => ['sometimes', 'array'],
+            'point.latitude' => ['required_with:point', 'numeric', 'between:-90,90'],
+            'point.longitude' => ['required_with:point', 'numeric', 'between:-180,180'],
+        ]);
+
+        return $this->inRoom($request, $code, function (Room $room, Player $me) use ($data) {
+            PowerUps::use($room, $me, $data['kind'], $data['point'] ?? null);
+
+            return 'powerUp';
         });
     }
 

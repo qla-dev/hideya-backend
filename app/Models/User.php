@@ -49,6 +49,8 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
+            'daily_power_up_on' => 'date',
+            'power_up_credits' => 'integer',
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];

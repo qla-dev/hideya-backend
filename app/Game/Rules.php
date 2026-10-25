@@ -5,7 +5,7 @@ namespace App\Game;
 /** House rules, with the same limits and defaults as the app's lobby. */
 final class Rules
 {
-    public const DEFAULTS = ['roundLength' => 30, 'ping' => 2, 'headStart' => 3, 'zone' => true, 'zoneSize' => 420, 'shrinkEvery' => 5];
+    public const DEFAULTS = ['roundLength' => 30, 'ping' => 2, 'headStart' => 3, 'zone' => true, 'zoneSize' => 420, 'shrinkEvery' => 5, 'powerUps' => true];
 
     public const FINAL_ZONE = 150;
 
@@ -19,6 +19,7 @@ final class Rules
             'rules.zone' => ['sometimes', 'boolean'],
             'rules.zoneSize' => ['sometimes', 'integer', 'between:200,3000'],
             'rules.shrinkEvery' => ['sometimes', 'integer', 'between:0,15'],
+            'rules.powerUps' => ['sometimes', 'boolean'],
         ];
     }
 

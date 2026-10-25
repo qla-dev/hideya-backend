@@ -15,6 +15,8 @@ class Room extends Model
         return [
             'rules' => 'array',
             'fired' => 'array',
+            'pickup' => 'array',
+            'zone_advance' => 'integer',
             'center_lat' => 'float',
             'center_lng' => 'float',
             'started_at' => 'datetime',

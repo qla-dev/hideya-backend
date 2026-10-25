@@ -24,6 +24,9 @@ final class Push
         'chat.event.pingRunners' => ['Ping!', 'Your location was just sent to the hunters. Move!'],
         'chat.event.pingHunters' => ['Ping!', 'The runners just lit up on your map.'],
         'chat.event.shrinkSoon' => ['Zone shrinks in 1 min', 'Get inside before it closes.'],
+        'chat.event.powerUp.shrinkOther' => ['Zone shrinks in 30 s!', 'A hunter used Shrink now. Get inside.'],
+        'chat.event.powerUp.flareOther' => ['Flare!', 'The hunters just saw where you are. Move!'],
+        'chat.event.pickupSpawned' => ['A power-up appeared', 'It’s on the map. First one there takes it.'],
     ];
 
     public static function forEvent(Room $room, ?string $team, string $key): void

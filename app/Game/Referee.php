@@ -40,17 +40,24 @@ final class Referee
                 self::ping($room, $second);
             }
         }
+        // Shrink now (a hunter power-up) shifts the zone's clock ahead by zone_advance.
+        $zoneT = $t + (int) $room->zone_advance;
         foreach (Rules::shrinkSeconds($room->rules) as $second) {
             $size = Rules::zoneAt($room->rules, $second);
-            if ($second - 60 <= $t && $fire("warn-{$second}")) {
+            if ($second - 60 <= $zoneT && $fire("warn-{$second}")) {
                 self::announce($room, null, 'chat.event.shrinkSoon', ['size' => $size]);
             }
-            if ($second <= $t && $fire("shrink-{$second}")) {
+            if ($second <= $zoneT && $fire("shrink-{$second}")) {
                 self::announce($room, null, 'chat.event.shrinking', ['size' => $size]);
             }
         }
+        $pickupChanged = PowerUps::tickPickups($room, $t, $fire);
         $room->fired = $fired;
         $room->save();
+        if ($pickupChanged) {
+            $room->bump();
+            Realtime::room($room->fresh('players'), 'pickup');
+        }
 
         $runnersLeft = $room->players->filter(fn (Player $p) => $p->team === 'runner' && ! $p->isOut())->count();
         if ($runnersLeft === 0) {
@@ -69,21 +76,38 @@ final class Referee
         Push::toPlayers($fresh, null, 'Round over', 'Open Hideya to see how it went.', ['code' => $room->code, 'event' => 'ended']);
     }
 
-    /** Hunters get the untagged runners' last known positions; runners are told they were pinged. */
-    private static function ping(Room $room, int $second): void
+    /**
+     * Hunters get the untagged runners' last known positions; runners are told
+     * they were pinged. Ghosted runners are left out, and a waiting decoy is
+     * shown in its runner's place. A flare is the same, on demand.
+     */
+    public static function ping(Room $room, int $second, bool $flare = false): void
     {
-        $positions = $room->players
-            ->filter(fn (Player $p) => $p->team === 'runner' && ! $p->isOut() && $p->lat !== null)
-            ->map(fn (Player $p) => ['id' => $p->id, 'lat' => $p->lat, 'lng' => $p->lng])
+        $hidden = PowerUps::ghosted($room, $second);
+        $decoys = $flare ? [] : PowerUps::takeDecoys($room, $second);
+        $runners = $room->players->filter(fn (Player $p) => $p->team === 'runner' && ! $p->isOut());
+        $positions = $runners
+            ->reject(fn (Player $p) => in_array($p->id, $hidden, true))
+            ->filter(fn (Player $p) => $p->lat !== null || isset($decoys[$p->id]))
+            ->map(fn (Player $p) => isset($decoys[$p->id])
+                ? ['id' => $p->id, 'lat' => $decoys[$p->id]['lat'], 'lng' => $decoys[$p->id]['lng']]
+                : ['id' => $p->id, 'lat' => $p->lat, 'lng' => $p->lng])
             ->values()->all();
-        $ping = RoomPing::create(['room_id' => $room->id, 'second' => $second, 'positions' => $positions, 'created_at' => now()]);
+        // A flare in the same second as a scheduled ping replaces that snapshot.
+        $ping = RoomPing::updateOrCreate(['room_id' => $room->id, 'second' => $second], ['positions' => $positions, 'created_at' => now()]);
         Realtime::team($room, 'hunter', [
             'type' => 'ping',
             'second' => $second,
             'positions' => array_map(fn ($p) => $p + ['live' => false, 'at' => $ping->created_at->toIso8601ZuluString('millisecond'), 'second' => $second], $positions),
         ]);
-        self::announce($room, 'runner', 'chat.event.pingRunners');
-        self::announce($room, 'hunter', 'chat.event.pingHunters');
+        if (! $flare) {
+            self::announce($room, 'runner', 'chat.event.pingRunners');
+            self::announce($room, 'hunter', 'chat.event.pingHunters');
+        }
+        $hiddenCount = $runners->filter(fn (Player $p) => in_array($p->id, $hidden, true))->count();
+        if ($hiddenCount > 0) {
+            self::announce($room, 'hunter', 'chat.event.runnersHidden', ['count' => $hiddenCount]);
+        }
     }
 
     public static function announce(Room $room, ?string $team, string $key, array $values = []): void
