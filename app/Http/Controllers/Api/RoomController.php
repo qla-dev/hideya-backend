@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Game\Presenter;
+use App\Game\Geo;
 use App\Game\PowerUps;
+use App\Game\Presenter;
 use App\Game\Push;
 use App\Game\Realtime;
 use App\Game\Referee;
@@ -53,7 +54,7 @@ class RoomController extends Controller
     public function join(Request $request, string $code): JsonResponse
     {
         $data = $request->validate(['name' => ['required', 'string', 'max:24']]);
-        $userId = $request->user('sanctum')?->id;
+        $userId = $request->bearerToken() ? $request->user('sanctum')?->id : null;
 
         return DB::transaction(function () use ($code, $data, $userId) {
             $room = Room::where('code', strtoupper($code))->lockForUpdate()->first();
@@ -115,7 +116,7 @@ class RoomController extends Controller
             $players = $room->players()->whereNull('left_at')->orderBy('id')->get();
             abort_if($players->count() < 2, 422, 'At least two players are needed.');
             foreach (self::assignTeams($players->pluck('pick', 'id')->all()) as $id => $team) {
-                $players->firstWhere('id', $id)->forceFill(['team' => $team, 'tagged_at' => null])->save();
+                $players->firstWhere('id', $id)->forceFill(['team' => $team, 'tagged_at' => null, 'metres' => 0, 'distance_lat' => null, 'distance_lng' => null])->save();
             }
             $room->forceFill(['status' => 'playing', 'started_at' => now(), 'fired' => []])->save();
             Push::toPlayers($room->load('players'), null, 'The round is on', 'Open Hideya to see your role.', ['code' => $room->code, 'event' => 'started']);
@@ -129,6 +130,17 @@ class RoomController extends Controller
         $data = $request->validate(['latitude' => ['required', 'numeric', 'between:-90,90'], 'longitude' => ['required', 'numeric', 'between:-180,180']]);
 
         return $this->inRoom($request, $code, function (Room $room, Player $me) use ($data) {
+            if ($room->status === 'playing' && ! $me->isOut()) {
+                $step = $me->distance_lat === null ? 0 : Geo::metres($me->distance_lat, $me->distance_lng, $data['latitude'], $data['longitude']);
+                // Retain the accepted baseline so several small steps can add up to real movement.
+                if ($step > 6 && $step < 150) {
+                    $me->metres += $step;
+                }
+                if ($me->distance_lat === null || $step > 6) {
+                    $me->distance_lat = $data['latitude'];
+                    $me->distance_lng = $data['longitude'];
+                }
+            }
             $me->forceFill(['lat' => $data['latitude'], 'lng' => $data['longitude'], 'located_at' => now()])->save();
             if ($room->status === 'playing' && $me->team && $me->isActive()) {
                 Realtime::team($room, $me->team, ['type' => 'location', 'position' => Presenter::position($me)]);
@@ -256,13 +268,18 @@ class RoomController extends Controller
     private function inRoom(Request $request, string $code, callable $change): JsonResponse
     {
         $token = (string) $request->header('X-Player-Token');
+        $userId = $request->bearerToken() ? $request->user('sanctum')?->id : null;
         abort_if($token === '', 401, 'Missing player token.');
 
-        return DB::transaction(function () use ($code, $token, $change) {
+        return DB::transaction(function () use ($code, $token, $change, $userId) {
             $room = Room::where('code', strtoupper($code))->lockForUpdate()->first();
             abort_unless($room, 404, 'No game with that code.');
             $me = $room->players()->where('token_hash', hash('sha256', $token))->first();
             abort_unless($me, 403, 'You are not in this game.');
+            // Signing in during a round may attach an unclaimed player; never transfer ownership.
+            if ($userId && ! $me->user_id && $room->status !== 'ended') {
+                $me->forceFill(['user_id' => $userId])->save();
+            }
             Referee::tick($room);
             $reason = $change($room, $me);
             if ($reason) {

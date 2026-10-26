@@ -31,11 +31,23 @@ Push to `main`, then open `https://qla.dev/hideya/endpoints/redeploy.php` (git p
 | POST | `/api/auth/apple` | anyone | `identityToken`, `nonce?` (raw), `name?` → `{token, user}` |
 | POST | `/api/auth/google` | anyone | `idToken` → `{token, user}` |
 | GET / PATCH / DELETE | `/api/me` | account | read, `name`, delete account (App Store requirement) |
+| GET | `/api/me/stats` | account | `{summary, recent}`: lifetime totals and the latest 12 results belonging to this account |
+| POST | `/api/me/demo-results` | account | `id`, `date` (ISO), `team`, `outcome`, `seconds`, `metres`; idempotent per account/demo ID; `{saved: true}` |
 | POST | `/api/auth/logout` | account | revokes this token |
 | POST / DELETE | `/api/push-tokens` | account | `token` (`ExponentPushToken[...]`), `platform?` |
 | POST | `/api/purchases` | Bearer | `{ productId }` after a store purchase. The server asks RevenueCat (`REVENUECAT_SECRET_API_KEY`, app user `hideya-user-{userId}`) what was bought and grants each pack transaction once; Plus follows the `plus` entitlement. Returns `granted` and `user` |
 
 Push notifications go through Expo's push service to signed-in players' devices: round start, hunters out, pings (per team), zone shrink warning, round over.
+
+## Account stats
+
+Apply migration `2026_10_26_000003_create_round_results` when deploying this change (`php artisan migrate --force`). It adds `round_results` and a distance counter on `players`. The redeploy endpoint does not run migrations.
+
+Online results are saved by the referee inside the room transaction for every account-linked participant when the round ends, even if their app is closed. Signing in on a room request links an unclaimed player; existing ownership is never transferred. Distance is accumulated from accepted location updates during play (steps over 6 m and under 150 m), excluding lobby, tagged/left and post-round movement. Time stops at tag, departure or the scheduled end, whichever is first, and excludes the head start. Leaving/cancellation is not a played round or a win. On the first stats read, existing finished account-linked rooms are recovered idempotently; old distances are zero because they were not recorded.
+
+`summary` has integer fields `total`, `played`, `won`, `neverCaught`, `longest`, `farthest`, `runnerPlayed`, `runnerWon`, `hunterPlayed`, `hunterWon`. It aggregates all saved results, with no 50-round limit. `recent` has up to 12 `{id, date, source, team, outcome, seconds, metres, won}` records; `source` distinguishes `demo` from `online`. Demo results are self-reported and cannot overwrite server-recorded online results; wins are calculated by the API. Results are private to the authenticated account and deleted with it, but survive removal of old rooms.
+
+The app uses database totals for signed-in profiles and an account-scoped local cache while offline. Signed-in demo results use a persistent retry queue belonging to the account that started the demo (or signed in during a guest demo). Guest history remains local and is not automatically claimed by the next account signing in. Online stats do not depend on uploading local history. Guests retain the latest 50 local rounds. Demo results are included in account totals and labelled in recent history.
 
 Rules (minutes unless noted): `roundLength` 10–180, `ping` 0–30 (0 = off), `headStart` 0–15, `zone` bool, `zoneSize` 200–3000 m, `shrinkEvery` 0–15. Defaults match the app: 30 / 2 / 3 / on / 420 / 5.
 

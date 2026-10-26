@@ -2,9 +2,10 @@
 
 use App\Game\Realtime;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\RealtimeController;
 use App\Http\Controllers\Api\PurchaseController;
+use App\Http\Controllers\Api\RealtimeController;
 use App\Http\Controllers\Api\RoomController;
+use App\Http\Controllers\Api\StatsController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
@@ -45,6 +46,8 @@ Route::middleware('throttle:180,1')->group(function () {
     Route::post('/auth/google', [AuthController::class, 'google'])->middleware('throttle:20,1');
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
+        Route::get('/me/stats', [StatsController::class, 'show']);
+        Route::post('/me/demo-results', [StatsController::class, 'storeDemo']);
         Route::patch('/me', [AuthController::class, 'update']);
         Route::post('/me/daily-power-up', [AuthController::class, 'claimDaily']);
         Route::post('/purchases', [PurchaseController::class, 'store'])->middleware('throttle:30,1');

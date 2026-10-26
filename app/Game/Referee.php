@@ -75,6 +75,7 @@ final class Referee
     {
         $room->forceFill(['status' => 'ended', 'ended_at' => now(), 'outcome' => $outcome])->save();
         PowerUps::rewardWinners($room->load('players'), $outcome);
+        Stats::recordRoom($room);
         $room->bump();
         $fresh = $room->fresh('players');
         Realtime::room($fresh, 'ended');
