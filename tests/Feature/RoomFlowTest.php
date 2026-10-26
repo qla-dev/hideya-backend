@@ -148,4 +148,26 @@ class RoomFlowTest extends TestCase
         $this->assertSame(['hunter', 'runner'], array_values(array_unique(RoomController::assignTeams([1 => 'runner', 2 => 'runner']))));
         $this->assertContains('runner', RoomController::assignTeams([1 => 'hunter', 2 => 'hunter']));
     }
+
+    public function test_runners_surrender_instead_of_leaving_and_hunters_leaving_hands_runners_the_win(): void
+    {
+        [$code, $hunter, $runner] = $this->lobby();
+        $this->as($hunter)->postJson("/api/rooms/{$code}/start")->assertOk();
+        $this->as($runner)->postJson("/api/rooms/{$code}/leave")->assertStatus(409);
+
+        // The last hunter leaving ends it for the runners.
+        $this->as($hunter)->postJson("/api/rooms/{$code}/leave")->assertOk();
+        $this->assertSame('runnersWin', $this->as($runner)->getJson("/api/rooms/{$code}")->json('room.outcome'));
+    }
+
+    public function test_surrender_puts_the_runner_out(): void
+    {
+        [$code, $hunter, $runner] = $this->lobby();
+        $this->as($hunter)->postJson("/api/rooms/{$code}/start")->assertOk();
+        $this->as($hunter)->postJson("/api/rooms/{$code}/surrender")->assertStatus(409);
+        $this->as($runner)->postJson("/api/rooms/{$code}/surrender")->assertOk();
+        $view = $this->as($hunter)->getJson("/api/rooms/{$code}");
+        $this->assertSame('huntersWin', $view->json('room.outcome'));
+        $this->assertContains('chat.event.surrendered', collect($view->json('chat'))->pluck('key'));
+    }
 }

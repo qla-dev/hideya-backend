@@ -194,9 +194,25 @@ class RoomController extends Controller
         });
     }
 
+    /** A runner gives up: out, like being tagged, and the hunters are told. */
+    public function surrender(Request $request, string $code): JsonResponse
+    {
+        return $this->inRoom($request, $code, function (Room $room, Player $me) {
+            abort_unless($room->status === 'playing' && $me->team === 'runner', 409, 'Only a runner in a running round can surrender.');
+            abort_if($me->tagged_at !== null, 409, 'You’re already out.');
+            $me->forceFill(['tagged_at' => now()])->save();
+            Referee::announce($room->load('players'), null, 'chat.event.surrendered', ['name' => $me->name]);
+            Referee::tick($room);
+
+            return 'tagged';
+        });
+    }
+
     public function leave(Request $request, string $code): JsonResponse
     {
         return $this->inRoom($request, $code, function (Room $room, Player $me) {
+            // Runners cannot just walk out of a running round: they surrender (or confirm a tag).
+            abort_if($room->status === 'playing' && $me->team === 'runner' && $me->tagged_at === null, 409, 'Runners can’t leave a running round. Surrender instead.');
             $me->forceFill(['left_at' => now(), 'ready' => false])->save();
             if ($me->is_host && ($next = $room->players()->whereNull('left_at')->orderBy('id')->first())) {
                 $me->forceFill(['is_host' => false])->save();

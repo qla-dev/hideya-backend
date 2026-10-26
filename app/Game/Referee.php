@@ -60,8 +60,12 @@ final class Referee
         }
 
         $runnersLeft = $room->players->filter(fn (Player $p) => $p->team === 'runner' && ! $p->isOut())->count();
+        $huntersLeft = $room->players->filter(fn (Player $p) => $p->team === 'hunter' && $p->isActive())->count();
         if ($runnersLeft === 0) {
             self::end($room, 'huntersWin');
+        } elseif ($huntersLeft === 0) {
+            // The last hunter left: nobody is hunting, so the runners win.
+            self::end($room, 'runnersWin');
         } elseif ($t >= $room->roundSeconds()) {
             self::end($room, 'runnersWin');
         }
