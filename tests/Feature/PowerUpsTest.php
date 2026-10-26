@@ -157,21 +157,25 @@ class PowerUpsTest extends TestCase
         $this->assertNull($this->as($hunter)->getJson("/api/rooms/{$code}")->json('room.pickup'));
     }
 
-    public function test_revenuecat_credits_a_pack_once(): void
+    public function test_a_verified_pack_is_granted_once(): void
     {
-        config(['services.revenuecat.webhook_secret' => 'Bearer rc-secret']);
+        config(['purchases.secret_api_key' => 'sk_test']);
         $user = User::create(['name' => 'Maya', 'apple_sub' => 'x']);
-        $event = ['event' => ['id' => 'evt-1', 'type' => 'NON_RENEWING_PURCHASE', 'app_user_id' => "hideya_{$user->id}", 'product_id' => 'hideya_powerups_15']];
-        $headers = ['Authorization' => 'Bearer rc-secret'];
-        $this->postJson('/api/revenuecat/webhook', $event, $headers)->assertOk();
-        $this->postJson('/api/revenuecat/webhook', $event, $headers)->assertOk();
+        \Illuminate\Support\Facades\Http::fake(['api.revenuecat.com/v1/subscribers/hideya-user-'.$user->id => \Illuminate\Support\Facades\Http::response(['subscriber' => [
+            'non_subscriptions' => ['hideya.qla.dev.powerups15' => [['id' => 'txn-1', 'purchase_date' => '2026-10-26T10:00:00Z']]],
+            'entitlements' => [],
+        ]])]);
+        $auth = ['Authorization' => 'Bearer '.$user->createToken('app')->plainTextToken];
+        $this->postJson('/api/purchases', ['productId' => 'hideya.qla.dev.powerups15'], $auth)->assertOk()->assertJsonPath('granted.powerUps', 15);
+        $this->postJson('/api/purchases', ['productId' => 'hideya.qla.dev.powerups15'], $auth)->assertOk()->assertJsonPath('granted.powerUps', 0);
         $owned = \App\Game\PowerUps::inventory($user->fresh());
         $this->assertSame(15, array_sum($owned));
         foreach ($owned as $count) {
             $this->assertContains($count, [3, 4], 'an even mix of the four kinds');
         }
-        $token = $user->createToken('app')->plainTextToken;
-        $this->getJson('/api/me', ['Authorization' => "Bearer {$token}"])->assertJsonPath('user.powerUps.inventory', $owned)->assertJsonPath('user.powerUps.dailyAvailable', true);
+        $this->app['auth']->forgetGuards(); // the test client keeps the signed-in user between requests
+        $this->getJson('/api/me', $auth)->assertJsonPath('user.powerUps.inventory', $owned)->assertJsonPath('user.powerUps.dailyAvailable', true);
+        $this->postJson('/api/purchases', ['productId' => 'hideya_powerups_15'], $auth)->assertUnprocessable();
     }
 
     public function test_the_daily_pack_opens_once_a_day_and_refills_at_local_midnight(): void
@@ -210,19 +214,20 @@ class PowerUpsTest extends TestCase
         $this->assertNull($this->as($runner)->getJson("/api/rooms/{$code}")->json('you.reward'));
     }
 
-    public function test_plus_subscription_adds_two_to_the_daily_pack(): void
+    public function test_plus_subscription_adds_one_to_the_daily_pack(): void
     {
-        config(['services.revenuecat.webhook_secret' => 'Bearer rc-secret']);
+        config(['purchases.secret_api_key' => 'sk_test']);
         $user = User::create(['name' => 'Maya', 'apple_sub' => 'x']);
-        $headers = ['Authorization' => 'Bearer rc-secret'];
-        $event = ['event' => ['id' => 'evt-plus', 'type' => 'INITIAL_PURCHASE', 'app_user_id' => "hideya_{$user->id}", 'product_id' => 'hideya_plus_monthly', 'expiration_at_ms' => now()->addMonth()->getTimestampMs()]];
-        $this->postJson('/api/revenuecat/webhook', $event, $headers)->assertOk();
+        $expires = now()->addMonth()->toIso8601ZuluString();
+        \Illuminate\Support\Facades\Http::fakeSequence('api.revenuecat.com/*')
+            ->push(['subscriber' => ['entitlements' => ['plus' => ['expires_date' => $expires, 'product_identifier' => 'hideya.qla.dev.plusmonthly']], 'non_subscriptions' => []]])
+            ->push(['subscriber' => ['entitlements' => ['plus' => ['expires_date' => now()->subDay()->toIso8601ZuluString()]], 'non_subscriptions' => []]]);
         $auth = ['Authorization' => 'Bearer '.$user->createToken('app')->plainTextToken];
-        $this->getJson('/api/me', $auth)->assertJsonPath('user.powerUps.plus', true);
+        $this->postJson('/api/purchases', ['productId' => 'hideya.qla.dev.plusmonthly'], $auth)->assertOk()->assertJsonPath('granted.plus', true)->assertJsonPath('user.powerUps.plus', true);
         $opened = $this->postJson('/api/me/daily-power-up', [], $auth)->assertOk();
-        $this->assertGreaterThanOrEqual(3, $opened->json('amount'));
-        $expired = ['event' => ['id' => 'evt-exp', 'type' => 'EXPIRATION', 'app_user_id' => "hideya_{$user->id}", 'product_id' => 'hideya_plus_monthly']];
-        $this->postJson('/api/revenuecat/webhook', $expired, $headers)->assertOk();
+        $this->assertGreaterThanOrEqual(2, $opened->json('amount'));
+        // A month on, /me asks RevenueCat again: this time it lapsed.
+        $this->travel(32)->days();
         $this->app['auth']->forgetGuards(); // the test client keeps the signed-in user between requests
         $this->getJson('/api/me', $auth)->assertJsonPath('user.powerUps.plus', false);
     }

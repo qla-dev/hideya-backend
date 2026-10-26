@@ -33,7 +33,7 @@ Push to `main`, then open `https://qla.dev/hideya/endpoints/redeploy.php` (git p
 | GET / PATCH / DELETE | `/api/me` | account | read, `name`, delete account (App Store requirement) |
 | POST | `/api/auth/logout` | account | revokes this token |
 | POST / DELETE | `/api/push-tokens` | account | `token` (`ExponentPushToken[...]`), `platform?` |
-| POST | `/api/revenuecat/webhook` | RevenueCat | `Authorization` = `REVENUECAT_WEBHOOK_SECRET`; app user `hideya_{userId}`. Acknowledges events; power-up packs will be credited here |
+| POST | `/api/purchases` | Bearer | `{ productId }` after a store purchase. The server asks RevenueCat (`REVENUECAT_SECRET_API_KEY`, app user `hideya-user-{userId}`) what was bought and grants each pack transaction once; Plus follows the `plus` entitlement. Returns `granted` and `user` |
 
 Push notifications go through Expo's push service to signed-in players' devices: round start, hunters out, pings (per team), zone shrink warning, round over.
 

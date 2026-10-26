@@ -39,7 +39,7 @@ class AccountTest extends TestCase
         $first = $this->postJson('/api/auth/apple', ['identityToken' => 'valid-apple', 'name' => 'Maya'])->assertCreated();
         $this->assertSame('Maya', $first->json('user.name'));
         $this->assertSame('apple', $first->json('user.provider'));
-        $this->assertSame('hideya_'.$first->json('user.id'), $first->json('user.revenueCatId'));
+        $this->assertSame('hideya-user-'.$first->json('user.id'), $first->json('user.revenueCatId'));
         $this->postJson('/api/auth/apple', ['identityToken' => 'valid-apple'])->assertOk()->assertJsonPath('user.id', $first->json('user.id'));
         $this->postJson('/api/auth/apple', ['identityToken' => 'forged'])->assertUnprocessable();
         $this->assertSame(1, User::count());
@@ -67,13 +67,12 @@ class AccountTest extends TestCase
         $this->getJson('/api/rooms/'.$room->json('room.code'), ['X-Player-Token' => $room->json('token')])->assertOk();
     }
 
-    public function test_revenuecat_webhook_needs_its_secret(): void
+    public function test_purchases_need_an_account_and_a_configured_store(): void
     {
-        config(['services.revenuecat.webhook_secret' => 'Bearer rc-secret']);
-        $event = ['event' => ['type' => 'NON_RENEWING_PURCHASE', 'app_user_id' => 'hideya_1']];
-
-        $this->postJson('/api/revenuecat/webhook', $event)->assertUnauthorized();
-        $this->postJson('/api/revenuecat/webhook', $event, ['Authorization' => 'Bearer rc-secret'])->assertOk();
+        $this->postJson('/api/purchases', ['productId' => 'hideya.qla.dev.powerups5'])->assertUnauthorized();
+        $user = User::create(['name' => 'Maya', 'apple_sub' => 'x']);
+        config(['purchases.secret_api_key' => null]);
+        $this->postJson('/api/purchases', ['productId' => 'hideya.qla.dev.powerups5'], ['Authorization' => 'Bearer '.$user->createToken('app')->plainTextToken])->assertStatus(503);
     }
 
     public function test_hosting_is_free_without_an_account(): void

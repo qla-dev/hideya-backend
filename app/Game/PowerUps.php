@@ -21,13 +21,12 @@ final class PowerUps
 {
     public const KINDS = ['ghost' => 'runner', 'decoy' => 'runner', 'shrink' => 'hunter', 'flare' => 'hunter'];
 
-    /** Packs sold through RevenueCat (non-consumable ids are not used). */
-    public const PACKS = ['hideya_powerups_5' => 5, 'hideya_powerups_15' => 15, 'hideya_powerups_40' => 40];
-
-    /** Hideya Plus: the monthly subscription; its daily pack holds two more. */
-    public const PLUS_PRODUCT = 'hideya_plus_monthly';
-
-    public const PLUS_DAILY_BONUS = 2;
+    /**
+     * Hideya Plus (config/purchases.php): the monthly subscription; its daily
+     * pack holds one more (~30 extra a month for €5.99, €0.20 each, under the
+     * 40-pack's €0.25).
+     */
+    public const PLUS_DAILY_BONUS = 1;
 
     public static function plus(User $user): bool
     {
@@ -337,10 +336,10 @@ final class PowerUps
         }
     }
 
-    /** RevenueCat purchase of a pack: a mix of all four kinds (an even share each, the rest at random). */
+    /** A verified pack purchase: a mix of all four kinds (an even share each, the rest at random). */
     public static function creditPack(User $user, string $productId): bool
     {
-        $amount = self::PACKS[$productId] ?? 0;
+        $amount = (int) (config('purchases.packs')[$productId] ?? 0);
         if ($amount <= 0) {
             return false;
         }

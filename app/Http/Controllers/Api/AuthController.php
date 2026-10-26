@@ -39,8 +39,10 @@ class AuthController extends Controller
         return $this->signIn('google_sub', $identity['sub'], $identity['email'], $identity['name'] ? mb_substr($identity['name'], 0, 24) : null);
     }
 
-    public function me(Request $request): JsonResponse
+    public function me(Request $request, \App\Services\RevenueCatPurchases $purchases): JsonResponse
     {
+        $purchases->refreshPlus($request->user());
+
         return response()->json(['user' => self::present($request->user())]);
     }
 
@@ -117,7 +119,7 @@ class AuthController extends Controller
             'email' => $user->email,
             'provider' => $user->apple_sub ? 'apple' : ($user->google_sub ? 'google' : null),
             // RevenueCat app user ID, so purchases attach to this account on every device.
-            'revenueCatId' => "hideya_{$user->id}",
+            'revenueCatId' => config('purchases.app_user_prefix').$user->id,
             'powerUps' => ['inventory' => \App\Game\PowerUps::inventory($user), 'dailyAvailable' => \App\Game\PowerUps::dailyAvailable($user), 'nextDailyAt' => \App\Game\PowerUps::nextReset(), 'plus' => \App\Game\PowerUps::plus($user), 'plusUntil' => $user->plus_until?->toIso8601ZuluString()],
         ];
     }

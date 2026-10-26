@@ -49,10 +49,6 @@ return [
     // The free daily power-up refills at midnight here.
     'hideya' => ['day_timezone' => env('HIDEYA_DAY_TIMEZONE', 'Europe/Sarajevo')],
 
-    'revenuecat' => [
-        'webhook_secret' => env('REVENUECAT_WEBHOOK_SECRET'),
-    ],
-
     // Expo push service; an access token is only needed if "enhanced push security" is turned on.
     'expo' => [
         'access_token' => env('EXPO_ACCESS_TOKEN'),

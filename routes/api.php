@@ -3,7 +3,7 @@
 use App\Game\Realtime;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\RealtimeController;
-use App\Http\Controllers\Api\RevenueCatController;
+use App\Http\Controllers\Api\PurchaseController;
 use App\Http\Controllers\Api\RoomController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -47,11 +47,10 @@ Route::middleware('throttle:180,1')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
         Route::patch('/me', [AuthController::class, 'update']);
         Route::post('/me/daily-power-up', [AuthController::class, 'claimDaily']);
+        Route::post('/purchases', [PurchaseController::class, 'store'])->middleware('throttle:30,1');
         Route::delete('/me', [AuthController::class, 'destroy']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::post('/push-tokens', [AuthController::class, 'registerPush']);
         Route::delete('/push-tokens', [AuthController::class, 'forgetPush']);
     });
 });
-
-Route::post('/revenuecat/webhook', [RevenueCatController::class, 'webhook']);
