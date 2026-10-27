@@ -4,7 +4,7 @@ Laravel 12 backend for Hideya's private rooms, with Pusher Channels for realtime
 
 ## Deploy
 
-Push to `main`, then open `https://qla.dev/hideya/endpoints/redeploy.php` (git pull, composer install, caches). It does not migrate: run `php artisan migrate` for a release that adds a migration.
+Push to `main`, then open `https://qla.dev/hideya/endpoints/redeploy.php` (git pull, composer install, `migrate --force`, caches). New migrations run against the live database on that redeploy, so keep them additive.
 
 ## Authentication
 
