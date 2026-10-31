@@ -126,6 +126,27 @@ class RoomFlowTest extends TestCase
         $this->assertDatabaseHas('chat_reports', ['room_code' => $code, 'chat_message_id' => $id, 'reporter_name' => 'Maya', 'reported_name' => 'Leo', 'message_text' => 'Something rude.']);
     }
 
+    public function test_blocking_a_player_hides_their_messages(): void
+    {
+        Event::fake([RoomUpdated::class, TeamUpdated::class]);
+        [$code, $maya, $leo] = $this->lobby('runner', 'runner');
+        $ana = $this->postJson("/api/rooms/{$code}/join", ['name' => 'Ana'])->assertCreated()->json('token');
+        $this->as($ana)->patchJson("/api/rooms/{$code}/me", ['pick' => 'hunter'])->assertOk();
+        $this->as($maya)->postJson("/api/rooms/{$code}/start")->assertOk();
+        $this->as($leo)->postJson("/api/rooms/{$code}/chat", ['text' => 'Something rude.'])->assertOk();
+        $view = $this->as($maya)->getJson("/api/rooms/{$code}");
+        $leoId = collect($view->json('room.players'))->firstWhere('name', 'Leo')['id'];
+        $mayaId = $view->json('you.id');
+
+        $this->as($maya)->postJson("/api/rooms/{$code}/players/{$mayaId}/block")->assertUnprocessable();
+        $blocked = $this->as($maya)->postJson("/api/rooms/{$code}/players/{$leoId}/block")->assertOk();
+        $this->assertSame([$leoId], $blocked->json('you.blocked'));
+        $this->assertNotContains('Something rude.', collect($blocked->json('chat'))->pluck('text'));
+        // Leo still sees his own message; only Maya stops seeing him.
+        $this->assertContains('Something rude.', collect($this->as($leo)->getJson("/api/rooms/{$code}")->json('chat'))->pluck('text'));
+        $this->assertDatabaseHas('chat_blocks', ['blocked_player_id' => $leoId, 'blocked_name' => 'Leo']);
+    }
+
     public function test_tagging_the_last_runner_ends_the_round(): void
     {
         Event::fake([RoomUpdated::class, TeamUpdated::class]);

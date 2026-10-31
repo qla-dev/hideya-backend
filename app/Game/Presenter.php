@@ -2,8 +2,9 @@
 
 namespace App\Game;
 
-use App\Models\Player;
+use App\Models\ChatBlock;
 use App\Models\ChatMessage;
+use App\Models\Player;
 use App\Models\Room;
 use Illuminate\Support\Carbon;
 
@@ -54,7 +55,7 @@ final class Presenter
     {
         return [
             'room' => self::publicState($room),
-            'you' => ['id' => $viewer->id, 'team' => $viewer->team, 'host' => $viewer->is_host, 'powerUps' => PowerUps::stateFor($room, $viewer), 'reward' => $viewer->reward],
+            'you' => ['id' => $viewer->id, 'team' => $viewer->team, 'host' => $viewer->is_host, 'powerUps' => PowerUps::stateFor($room, $viewer), 'reward' => $viewer->reward, 'blocked' => ChatBlock::blockedIn($room, $viewer)],
             'positions' => self::positionsFor($room, $viewer),
             'chat' => self::chatFor($room, $viewer),
             'realtime' => Realtime::clientConfig($room, $viewer),
@@ -95,8 +96,11 @@ final class Presenter
 
     public static function chatFor(Room $room, Player $viewer): array
     {
+        $blocked = ChatBlock::blockedIn($room, $viewer);
+
         return $room->messages()
             ->where(fn ($q) => $q->whereNull('team')->orWhere('team', $viewer->team))
+            ->where(fn ($q) => $q->whereNull('player_id')->orWhereNotIn('player_id', $blocked))
             ->orderByDesc('id')->limit(100)->get()->reverse()->values()
             ->map(fn (ChatMessage $m) => self::message($m, $room))->all();
     }

@@ -10,6 +10,7 @@ use App\Game\Realtime;
 use App\Game\Referee;
 use App\Game\Rules;
 use App\Http\Controllers\Controller;
+use App\Models\ChatBlock;
 use App\Models\ChatReport;
 use App\Models\Player;
 use App\Models\Room;
@@ -180,6 +181,21 @@ class RoomController extends Controller
                 'reporter_user_id' => $me->user_id, 'reporter_name' => $me->name,
                 'reported_player_id' => $author?->id, 'reported_user_id' => $author?->user_id, 'reported_name' => $author?->name ?? '',
                 'message_text' => (string) $reported->text,
+            ]);
+
+            return null;
+        });
+    }
+
+    /** Block a player: their chat messages disappear for you, now and (signed in) in later games. */
+    public function block(Request $request, string $code, int $player): JsonResponse
+    {
+        return $this->inRoom($request, $code, function (Room $room, Player $me) use ($player) {
+            $blocked = $room->players()->find($player);
+            abort_unless($blocked, 404, 'That player isn’t in this game.');
+            abort_if($blocked->id === $me->id, 422, 'You can’t block yourself.');
+            ChatBlock::firstOrCreate(['blocker_player_id' => $me->id, 'blocked_player_id' => $blocked->id], [
+                'room_id' => $room->id, 'blocker_user_id' => $me->user_id, 'blocked_user_id' => $blocked->user_id, 'blocked_name' => $blocked->name,
             ]);
 
             return null;
