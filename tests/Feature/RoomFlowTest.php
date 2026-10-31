@@ -107,6 +107,25 @@ class RoomFlowTest extends TestCase
         Event::assertDispatched(TeamUpdated::class, fn ($e) => $e->team === 'runner' && ($e->payload['message']['text'] ?? null) === 'Under the slide.');
     }
 
+    public function test_a_teammate_can_report_a_chat_message(): void
+    {
+        Event::fake([RoomUpdated::class, TeamUpdated::class]);
+        [$code, $maya, $leo] = $this->lobby('runner', 'runner');
+        $ana = $this->postJson("/api/rooms/{$code}/join", ['name' => 'Ana'])->assertCreated()->json('token');
+        $this->as($ana)->patchJson("/api/rooms/{$code}/me", ['pick' => 'hunter'])->assertOk();
+        $this->as($maya)->postJson("/api/rooms/{$code}/start")->assertOk();
+        $this->as($leo)->postJson("/api/rooms/{$code}/chat", ['text' => 'Something rude.'])->assertOk();
+        $id = collect($this->as($maya)->getJson("/api/rooms/{$code}")->json('chat'))->firstWhere('text', 'Something rude.')['id'];
+
+        $this->as($leo)->postJson("/api/rooms/{$code}/chat/{$id}/report")->assertUnprocessable();
+        $this->as($ana)->postJson("/api/rooms/{$code}/chat/{$id}/report")->assertNotFound();
+        $this->as($maya)->postJson("/api/rooms/{$code}/chat/{$id}/report")->assertOk();
+        $this->as($maya)->postJson("/api/rooms/{$code}/chat/{$id}/report")->assertOk();
+
+        $this->assertDatabaseCount('chat_reports', 1);
+        $this->assertDatabaseHas('chat_reports', ['room_code' => $code, 'chat_message_id' => $id, 'reporter_name' => 'Maya', 'reported_name' => 'Leo', 'message_text' => 'Something rude.']);
+    }
+
     public function test_tagging_the_last_runner_ends_the_round(): void
     {
         Event::fake([RoomUpdated::class, TeamUpdated::class]);

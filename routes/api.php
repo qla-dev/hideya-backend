@@ -35,6 +35,7 @@ Route::middleware('throttle:180,1')->group(function () {
     Route::post('/rooms/{code}/start', [RoomController::class, 'start']);
     Route::post('/rooms/{code}/location', [RoomController::class, 'location']);
     Route::post('/rooms/{code}/chat', [RoomController::class, 'chat']);
+    Route::post('/rooms/{code}/chat/{message}/report', [RoomController::class, 'report'])->whereNumber('message')->middleware('throttle:20,1');
     Route::post('/rooms/{code}/power-ups', [RoomController::class, 'powerUp']);
     Route::post('/rooms/{code}/tagged', [RoomController::class, 'tagged']);
     Route::post('/rooms/{code}/surrender', [RoomController::class, 'surrender']);

@@ -10,6 +10,7 @@ use App\Game\Realtime;
 use App\Game\Referee;
 use App\Game\Rules;
 use App\Http\Controllers\Controller;
+use App\Models\ChatReport;
 use App\Models\Player;
 use App\Models\Room;
 use Illuminate\Http\JsonResponse;
@@ -160,6 +161,26 @@ class RoomController extends Controller
             abort_if($me->isOut(), 403, 'You’re out, so you can read the chat but not send.');
             $message = $room->messages()->create(['player_id' => $me->id, 'team' => $me->team, 'kind' => 'chat', 'text' => trim($data['text']), 'created_at' => now()]);
             Realtime::team($room, $me->team, ['type' => 'chat', 'message' => Presenter::message($message, $room->load('players'))]);
+
+            return null;
+        });
+    }
+
+    /** Report a player's chat message. Stored for admins only; reporting the same message twice is a no-op. */
+    public function report(Request $request, string $code, int $message): JsonResponse
+    {
+        return $this->inRoom($request, $code, function (Room $room, Player $me) use ($message) {
+            // Only messages this player could see: their own team's chat.
+            $reported = $room->messages()->where('id', $message)->where('kind', 'chat')->where('team', $me->team)->whereNotNull('player_id')->first();
+            abort_unless($reported, 404, 'That message is gone.');
+            abort_if($reported->player_id === $me->id, 422, 'You can’t report your own message.');
+            $author = $room->players()->find($reported->player_id);
+            ChatReport::firstOrCreate(['chat_message_id' => $reported->id, 'reporter_player_id' => $me->id], [
+                'room_id' => $room->id, 'room_code' => $room->code,
+                'reporter_user_id' => $me->user_id, 'reporter_name' => $me->name,
+                'reported_player_id' => $author?->id, 'reported_user_id' => $author?->user_id, 'reported_name' => $author?->name ?? '',
+                'message_text' => (string) $reported->text,
+            ]);
 
             return null;
         });
