@@ -15,7 +15,7 @@ use App\Models\User;
  *
  * Runners: ghost (left out of pings until the next shrink, or 4 min with no
  * zone) and decoy (the next ping shows a point they chose). Hunters: shrink
- * (the next zone shrink comes in 30 s) and flare (an extra ping now).
+ * (the next zone shrink happens now) and flare (an extra ping now).
  */
 final class PowerUps
 {
@@ -34,8 +34,6 @@ final class PowerUps
     }
 
     public const GHOST_WITHOUT_ZONE = 240;
-
-    public const SHRINK_WARNING = 30;
 
     public const PICKUP_FIRST = 120;
 
@@ -147,7 +145,6 @@ final class PowerUps
         if ($kind === 'shrink') {
             $next = self::nextShrink($room, $t);
             abort_if($next === null, 409, 'There is no shrink left to bring forward.');
-            abort_if($next - ($t + $room->zone_advance) <= self::SHRINK_WARNING, 409, 'The zone is about to shrink anyway.');
             $recent = PowerUpUse::where('room_id', $room->id)->where('kind', 'shrink')->where('second', '>', $second - 300)->exists();
             abort_if($recent, 409, 'Your team used Shrink now in the last 5 minutes.');
         }
@@ -222,9 +219,10 @@ final class PowerUps
     private static function bringShrinkForward(Room $room, float $t, Player $me): void
     {
         $next = self::nextShrink($room, $t);
-        $room->zone_advance += (int) round($next - ($t + $room->zone_advance) - self::SHRINK_WARNING);
-        // The regular one-minute warning would now be wrong; this one replaces it.
-        $room->fired = array_values(array_unique([...($room->fired ?? []), "warn-{$next}"]));
+        // The zone's clock jumps to that shrink, so it happens now, on every map at once.
+        $room->zone_advance += (int) ceil($next - ($t + $room->zone_advance));
+        // This announcement replaces the regular warning and "shrinking" ones for it.
+        $room->fired = array_values(array_unique([...($room->fired ?? []), "warn-{$next}", "shrink-{$next}"]));
         $room->save();
         Referee::announce($room, 'hunter', 'chat.event.powerUp.shrinkTeam', ['name' => $me->name]);
         Referee::announce($room, 'runner', 'chat.event.powerUp.shrinkOther', ['size' => Rules::zoneAt($room->rules, $next)]);

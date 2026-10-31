@@ -113,17 +113,18 @@ class PowerUpsTest extends TestCase
         $this->assertNotContains('chat.event.powerUp.decoyTeam', collect($this->as($hunter)->getJson("/api/rooms/{$code}")->json('chat'))->pluck('key'));
     }
 
-    public function test_shrink_now_brings_the_next_shrink_to_thirty_seconds(): void
+    public function test_shrink_now_shrinks_the_zone_at_once(): void
     {
         [$code, $hunter, $runner] = $this->round();
         $this->travel(4)->minutes(); // 240 s; the first shrink is due at 480 s
+        $before = $this->as($runner)->getJson("/api/rooms/{$code}")->json('room.zoneAdvance');
         $advance = $this->use($hunter, $code, 'shrink')->assertOk()->json('room.zoneAdvance');
-        $this->assertEqualsWithDelta(210, $advance, 1);
+        $this->assertEqualsWithDelta(240, $advance - $before, 1);
         $keys = collect($this->as($runner)->getJson("/api/rooms/{$code}")->json('chat'))->pluck('key');
         $this->assertContains('chat.event.powerUp.shrinkOther', $keys);
+        // The power-up's own notice stands in for the regular warning and "shrinking" ones.
         $this->assertNotContains('chat.event.shrinking', $keys);
-        $this->travel(31)->seconds();
-        $this->assertContains('chat.event.shrinking', collect($this->as($runner)->getJson("/api/rooms/{$code}")->json('chat'))->pluck('key'));
+        $this->assertNotContains('chat.event.shrinkSoon', $keys);
     }
 
     public function test_flare_pings_now(): void
