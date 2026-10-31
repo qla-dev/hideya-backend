@@ -103,13 +103,12 @@ class PowerUpsTest extends TestCase
         [$code, $hunter, $runner] = $this->round();
         $this->at($runner, $code, 43.8563, 18.4131);
         $this->travel(3)->minutes();
-        // Too close to the runner, outside the 420 m zone, then a valid spot about 190 m north.
-        $this->use($runner, $code, 'decoy', ['point' => ['latitude' => 43.8565, 'longitude' => 18.4131]])->assertUnprocessable();
+        // Outside the 420 m zone is refused; anywhere inside it is fine, even right next to the runner.
         $this->use($runner, $code, 'decoy', ['point' => ['latitude' => 43.8600, 'longitude' => 18.4131]])->assertUnprocessable();
-        $this->use($runner, $code, 'decoy', ['point' => ['latitude' => 43.8580, 'longitude' => 18.4131]])->assertOk()->assertJsonPath('you.powerUps.decoyPending', true);
+        $this->use($runner, $code, 'decoy', ['point' => ['latitude' => 43.8565, 'longitude' => 18.4131]])->assertOk()->assertJsonPath('you.powerUps.decoyPending', true);
         $this->travel(2)->minutes();
         $ping = collect($this->as($hunter)->getJson("/api/rooms/{$code}")->json('positions'))->firstWhere('second', 300);
-        $this->assertEqualsWithDelta(43.8580, $ping['lat'], 1e-6);
+        $this->assertEqualsWithDelta(43.8565, $ping['lat'], 1e-6);
         // The hunters were not told about it.
         $this->assertNotContains('chat.event.powerUp.decoyTeam', collect($this->as($hunter)->getJson("/api/rooms/{$code}")->json('chat'))->pluck('key'));
     }

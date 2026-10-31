@@ -37,8 +37,6 @@ final class PowerUps
 
     public const SHRINK_WARNING = 30;
 
-    public const DECOY_MIN_METRES = 150;
-
     public const PICKUP_FIRST = 120;
 
     public const PICKUP_EVERY = 240;
@@ -158,8 +156,6 @@ final class PowerUps
             abort_if($room->center_lat !== null && $room->rules['zone']
                 && Geo::metres($room->center_lat, $room->center_lng, $point['latitude'], $point['longitude']) > Rules::zoneAt($room->rules, $t + $room->zone_advance) / 2,
                 422, 'Put the decoy inside the zone.');
-            abort_if($me->lat !== null && Geo::metres($me->lat, $me->lng, $point['latitude'], $point['longitude']) < self::DECOY_MIN_METRES,
-                422, 'Put the decoy at least 150 m from you.');
             abort_if(PowerUpUse::where('player_id', $me->id)->where('kind', 'decoy')->whereNull('ends_second')->exists(), 409, 'Your decoy is already waiting for the next ping.');
             $data = ['lat' => $point['latitude'], 'lng' => $point['longitude']];
         }
